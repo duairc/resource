@@ -1,0 +1,38 @@
+name:           couple
+version:        0.1
+synopsis:       A unification of bracket and ResourceT
+license:        BSD3
+license-file:   LICENSE
+author:         Shane O'Brien
+maintainer:     shane@duairc.com
+stability:      Experimental
+category:       Control
+cabal-version:  >= 1.6
+homepage:       http://github.com/duairc/couple
+bug-reports:    http://github.com/duairc/couple/issues
+build-type:     Simple
+
+extra-source-files:
+  CONTRIBUTORS
+
+Library
+  hs-source-dirs:
+    src
+
+  exposed-modules:
+    Control.Monad.Interface.Decouple
+    Control.Monad.Trans.Couple
+    Control.Monad.Trans.Couple.Unsafe
+    Control.Monad.Trans.Decouple
+
+  other-modules:
+    Control.Monad.Trans.Couple.Internal
+
+  build-depends:
+    base > 4.5 && < 5,
+    containers > 0.4 && < 0.6,
+    layers > 0.1 && < 0.3,
+    transformers > 0.2 && < 0.4
+
+  ghc-options:
+    -Wall
