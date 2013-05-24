@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -20,11 +21,15 @@ import           Control.Monad
                      ( MonadPlus (mzero, mplus)
                      , ap
                      , liftM
+#if MIN_VERSION_base(4, 4, 0)
                      , liftM2
+#endif
                      , when
                      )
 import           Control.Monad.Fix (MonadFix (mfix))
+#if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip (mzip, mzipWith, munzip))
+#endif
 import           Data.Word (Word)
 
 
@@ -47,9 +52,11 @@ import           Control.Monad.Layer
                          , restore
                          , layerControl
                          )
+#if __GLASGOW_HASKELL__ >= 702
                      , MonadTrans (type Outer, transInvmap)
                      , MonadTransFunctor (transMap)
                      , MonadTransControl (transControl)
+#endif
                      , MonadLift (lift)
                      , controlLayer
                      )
@@ -132,6 +139,7 @@ instance MonadFix m => MonadFix (DecoupleT v i m) where
     {-# INLINE mfix #-}
 
 
+#if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
 instance MonadZip m => MonadZip (DecoupleT v i m) where
     mzipWith f = liftM2 f
@@ -140,6 +148,7 @@ instance MonadZip m => MonadZip (DecoupleT v i m) where
     {-# INLINE mzip #-}
     munzip m = (liftM fst m, liftM snd m)
     {-# INLINE munzip #-}
+#endif
 
 
 ------------------------------------------------------------------------------
@@ -153,13 +162,13 @@ instance Monad m => MonadLayer (DecoupleT v i m) where
     type Inner (DecoupleT v i m) = m
     layer = DecoupleT . const
     {-# INLINE layer #-}
-    layerInvmap = transInvmap
+    layerInvmap (f, _) = layerMap f
     {-# INLINE layerInvmap #-}
 
 
 ------------------------------------------------------------------------------
 instance Monad m => MonadLayerFunctor (DecoupleT v i m) where
-    layerMap = transMap
+    layerMap f (DecoupleT m) = DecoupleT $ f . m
     {-# INLINE layerMap #-}
 
 
@@ -172,6 +181,7 @@ instance Monad m => MonadLayerControl (DecoupleT v i m) where
     {-# INLINE layerControl #-}
 
 
+#if __GLASGOW_HASKELL__ >= 702
 ------------------------------------------------------------------------------
 instance Monad m => MonadTrans (DecoupleT v i m) where
     type Outer (DecoupleT v i m) = DecoupleT v i
@@ -189,6 +199,7 @@ instance Monad m => MonadTransFunctor (DecoupleT v i m) where
 instance Monad m => MonadTransControl (DecoupleT v i m) where
     transControl f = DecoupleT $ \r -> f $ \(DecoupleT t) -> liftM L $ t r
     {-# INLINE transControl #-}
+#endif
 
 
 ------------------------------------------------------------------------------

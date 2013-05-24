@@ -1,4 +1,7 @@
+{-# LANGUAGE CPP #-}
+#ifdef LANGUAGE_Unsafe
 {-# LANGUAGE Unsafe #-}
+#endif
 
 module Control.Monad.Trans.Couple.Unsafe
     ( unsafeDecouple

@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Control.Monad.Trans.Couple.Internal
@@ -13,16 +14,25 @@ where
 import           Control.Arrow (first)
 import           Control.Applicative (Applicative (pure, (<*>)))
 import           Control.Concurrent (ThreadId)
-import           Control.Monad (liftM, liftM2)
+import           Control.Monad
+                     ( liftM
+#if MIN_VERSION_base(4, 4, 0)
+                     , liftM2
+#endif
+                     )
+#if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip (mzip, mzipWith, munzip))
+#endif
 
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer
                      ( MonadLayer (type Inner, layer, layerInvmap)
                      , MonadLayerFunctor (layerMap)
+#if __GLASGOW_HASKELL__ >= 702
                      , MonadTrans (type Outer, transInvmap)
                      , MonadTransFunctor (transMap)
+#endif
                      )
 import           Control.Monad.Interface.Fork (MonadFork, fork, forkOn)
 import           Control.Monad.Interface.Mask (mask)
@@ -76,6 +86,7 @@ instance MonadTry m => Monad (CoupleT m) where
     {-# INLINE (>>=) #-}
 
 
+#if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
 instance (MonadTry m, MonadZip m) => MonadZip (CoupleT m) where
     mzipWith f = liftM2 f
@@ -84,6 +95,7 @@ instance (MonadTry m, MonadZip m) => MonadZip (CoupleT m) where
     {-# INLINE mzip #-}
     munzip m = (liftM fst m, liftM snd m)
     {-# INLINE munzip #-}
+#endif
 
 
 ------------------------------------------------------------------------------
@@ -101,6 +113,7 @@ instance MonadTry m => MonadLayerFunctor (CoupleT m) where
     {-# INLINE layerMap #-}
 
 
+#if __GLASGOW_HASKELL__ >= 702
 ------------------------------------------------------------------------------
 instance MonadTry m => MonadTrans (CoupleT m) where
     type Outer (CoupleT m) = CoupleT
@@ -112,6 +125,7 @@ instance MonadTry m => MonadTrans (CoupleT m) where
 instance MonadTry m => MonadTransFunctor (CoupleT m) where
     transMap f (CoupleT m) = CoupleT (f (liftM (fmap f) m))
     {-# INLINE transMap #-}
+#endif
 
 
 ------------------------------------------------------------------------------

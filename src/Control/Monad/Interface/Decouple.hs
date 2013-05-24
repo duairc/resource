@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverlappingInstances #-}
@@ -30,6 +31,12 @@ class (Monad i, Monad m, MonadLift i m) => MonadDecouple i m where
 
 
 ------------------------------------------------------------------------------
-instance (MonadLayer m, MonadDecouple i (Inner m)) => MonadDecouple i m where
+#if __GLASGOW_HASKELL__ >= 702
+instance (MonadLayer m, MonadDecouple i (Inner m)) =>
+#else
+instance (MonadLayer m, MonadDecouple i (Inner m), MonadLift i m) =>
+#endif
+    MonadDecouple i m
+  where
     decouple = layer . liftM (fmap layer) . decouple
     {-# INLINE decouple #-}
