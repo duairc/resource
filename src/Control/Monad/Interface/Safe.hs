@@ -5,8 +5,8 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.Interface.Decouple
-    ( MonadDecouple (decouple)
+module Control.Monad.Interface.Safe
+    ( MonadSafe (acquire)
     )
 where
 
@@ -21,22 +21,22 @@ import           Control.Monad.Layer
                      )
 
 
--- couple --------------------------------------------------------------------
-import           Control.Monad.Trans.Couple (CoupleT)
+-- resource ------------------------------------------------------------------
+import           Data.Resource (Resource)
 
 
 ------------------------------------------------------------------------------
-class (Monad i, Monad m, MonadLift i m) => MonadDecouple i m where
-    decouple :: CoupleT i a -> m (a, m ())
+class (Monad i, Monad m, MonadLift i m) => MonadSafe i m where
+    acquire :: Resource i a -> m (a, m ())
 
 
 ------------------------------------------------------------------------------
 #if __GLASGOW_HASKELL__ >= 702
-instance (MonadLayer m, MonadDecouple i (Inner m)) =>
+instance (MonadLayer m, MonadSafe i (Inner m)) =>
 #else
-instance (MonadLayer m, MonadDecouple i (Inner m), MonadLift i m) =>
+instance (MonadLayer m, MonadSafe i (Inner m), MonadLift i m) =>
 #endif
-    MonadDecouple i m
+    MonadSafe i m
   where
-    decouple = layer . liftM (fmap layer) . decouple
-    {-# INLINE decouple #-}
+    acquire = layer . liftM (fmap layer) . acquire
+    {-# INLINE acquire #-}

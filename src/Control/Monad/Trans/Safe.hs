@@ -6,9 +6,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.Trans.Decouple
-    ( DecoupleT
-    , runDecoupleT
+module Control.Monad.Trans.Safe
+    ( SafeT
+    , runSafeT
     )
 where
 
@@ -62,8 +62,8 @@ import           Control.Monad.Layer
                      )
 import           Control.Monad.Interface.Fork (MonadFork (fork, forkOn))
 import           Control.Monad.Interface.Mask (MonadMask, mask, mask_)
-import           Control.Monad.Interface.MutVar
-                     ( MonadMutVar
+import           Control.Monad.Interface.ST
+                     ( MonadST
                      , atomicModifyRef'
                      , newRef
                      , writeRef
@@ -71,11 +71,9 @@ import           Control.Monad.Interface.MutVar
 import           Control.Monad.Interface.Try (MonadTry, finally, mtry)
 
 
--- couple --------------------------------------------------------------------
-import           Control.Monad.Interface.Decouple
-                     ( MonadDecouple (decouple)
-                     )
-import           Control.Monad.Trans.Couple.Internal (CoupleT (CoupleT))
+-- resource ------------------------------------------------------------------
+import           Control.Monad.Interface.Safe (MonadSafe (acquire))
+import           Data.Resource.Internal (Resource (Resource))
 
 
 ------------------------------------------------------------------------------
@@ -83,23 +81,23 @@ data Finalizers i = Finalizers !Int !Word !(IntMap (i ()))
 
 
 ------------------------------------------------------------------------------
-newtype DecoupleT v i m a = DecoupleT (v (Finalizers i) -> m a)
+newtype SafeT v i m a = SafeT (v (Finalizers i) -> m a)
 
 
 ------------------------------------------------------------------------------
-instance T.MonadTrans (DecoupleT v i) where
+instance T.MonadTrans (SafeT v i) where
     lift = layer
     {-# INLINE lift #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => Functor (DecoupleT v i m) where
+instance Monad m => Functor (SafeT v i m) where
     fmap = liftM
     {-# INLINE fmap #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => Applicative (DecoupleT v i m) where
+instance Monad m => Applicative (SafeT v i m) where
     pure = return
     {-# INLINE pure #-}
     (<*>) = ap
@@ -107,7 +105,7 @@ instance Monad m => Applicative (DecoupleT v i m) where
 
 
 ------------------------------------------------------------------------------
-instance MonadPlus m => Alternative (DecoupleT v i m) where
+instance MonadPlus m => Alternative (SafeT v i m) where
     empty = mzero
     {-# INLINE empty #-}
     (<|>) = mplus
@@ -115,18 +113,18 @@ instance MonadPlus m => Alternative (DecoupleT v i m) where
 
 
 ------------------------------------------------------------------------------
-instance Monad m => Monad (DecoupleT v i m) where
+instance Monad m => Monad (SafeT v i m) where
     return = layer . return
     {-# INLINE return #-}
-    DecoupleT m >>= f = DecoupleT $ \r -> m r >>= \a ->
-        let DecoupleT m' = f a in m' r
+    SafeT m >>= f = SafeT $ \r -> m r >>= \a ->
+        let SafeT m' = f a in m' r
     {-# INLINE (>>=) #-}
     fail = layer . fail
     {-# INLINE fail #-}
 
 
 ------------------------------------------------------------------------------
-instance MonadPlus m => MonadPlus (DecoupleT v i m) where
+instance MonadPlus m => MonadPlus (SafeT v i m) where
     mzero = layer mzero
     {-# INLINE mzero #-}
     mplus a b = controlLayer (\run -> mplus (run a) (run b))
@@ -134,14 +132,14 @@ instance MonadPlus m => MonadPlus (DecoupleT v i m) where
 
 
 ------------------------------------------------------------------------------
-instance MonadFix m => MonadFix (DecoupleT v i m) where
+instance MonadFix m => MonadFix (SafeT v i m) where
     mfix f = controlLayer (\run -> mfix (\a -> run (restore a >>= f)))
     {-# INLINE mfix #-}
 
 
 #if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
-instance MonadZip m => MonadZip (DecoupleT v i m) where
+instance MonadZip m => MonadZip (SafeT v i m) where
     mzipWith f = liftM2 f
     {-# INLINE mzipWith #-}
     mzip = liftM2 (,)
@@ -152,52 +150,52 @@ instance MonadZip m => MonadZip (DecoupleT v i m) where
 
 
 ------------------------------------------------------------------------------
-instance MonadIO m => MonadIO (DecoupleT v i m) where
+instance MonadIO m => MonadIO (SafeT v i m) where
     liftIO = layer . liftIO
     {-# INLINE liftIO #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => MonadLayer (DecoupleT v i m) where
-    type Inner (DecoupleT v i m) = m
-    layer = DecoupleT . const
+instance Monad m => MonadLayer (SafeT v i m) where
+    type Inner (SafeT v i m) = m
+    layer = SafeT . const
     {-# INLINE layer #-}
     layerInvmap (f, _) = layerMap f
     {-# INLINE layerInvmap #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => MonadLayerFunctor (DecoupleT v i m) where
-    layerMap f (DecoupleT m) = DecoupleT $ f . m
+instance Monad m => MonadLayerFunctor (SafeT v i m) where
+    layerMap f (SafeT m) = SafeT $ f . m
     {-# INLINE layerMap #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => MonadLayerControl (DecoupleT v i m) where
-    newtype LayerState (DecoupleT v i m) a = L {unL :: a}
-    restore = DecoupleT . const . return . unL
+instance Monad m => MonadLayerControl (SafeT v i m) where
+    newtype LayerState (SafeT v i m) a = L {unL :: a}
+    restore = SafeT . const . return . unL
     {-# INLINE restore #-}
-    layerControl f = DecoupleT $ \r -> f $ \(DecoupleT t) -> liftM L $ t r
+    layerControl f = SafeT $ \r -> f $ \(SafeT t) -> liftM L $ t r
     {-# INLINE layerControl #-}
 
 
 #if __GLASGOW_HASKELL__ >= 702
 ------------------------------------------------------------------------------
-instance Monad m => MonadTrans (DecoupleT v i m) where
-    type Outer (DecoupleT v i m) = DecoupleT v i
+instance Monad m => MonadTrans (SafeT v i m) where
+    type Outer (SafeT v i m) = SafeT v i
     transInvmap (f, _) = transMap f
     {-# INLINE transInvmap #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => MonadTransFunctor (DecoupleT v i m) where
-    transMap f (DecoupleT m) = DecoupleT $ f . m
+instance Monad m => MonadTransFunctor (SafeT v i m) where
+    transMap f (SafeT m) = SafeT $ f . m
     {-# INLINE transMap #-}
 
 
 ------------------------------------------------------------------------------
-instance Monad m => MonadTransControl (DecoupleT v i m) where
-    transControl f = DecoupleT $ \r -> f $ \(DecoupleT t) -> liftM L $ t r
+instance Monad m => MonadTransControl (SafeT v i m) where
+    transControl f = SafeT $ \r -> f $ \(SafeT t) -> liftM L $ t r
     {-# INLINE transControl #-}
 #endif
 
@@ -206,38 +204,38 @@ instance Monad m => MonadTransControl (DecoupleT v i m) where
 instance 
     ( MonadFork m
     , MonadLift i m
-    , MonadMutVar v i
+    , MonadST v i
     , MonadTry i
     , MonadTry m
     )
   =>
-    MonadFork (DecoupleT v i m)
+    MonadFork (SafeT v i m)
   where
-    fork (DecoupleT f) = DecoupleT $ \istate -> mask $ \unmask -> do
+    fork (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
         lift $ stateAlloc istate
         fork $ unmask (f istate) `finally` lift (stateCleanup istate)
 
-    forkOn n (DecoupleT f) = DecoupleT $ \istate -> mask $ \unmask -> do
+    forkOn n (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
         lift $ stateAlloc istate
         forkOn n $ unmask (f istate) `finally` lift (stateCleanup istate)
 
 
 ------------------------------------------------------------------------------
-instance (MonadMutVar v i, MonadLift i m, MonadMask i) =>
-    MonadDecouple i (DecoupleT v i m)
+instance (MonadST v i, MonadLift i m, MonadMask i) =>
+    MonadSafe i (SafeT v i m)
   where
-    decouple (CoupleT m) = DecoupleT $ \istate -> lift $ mask $ \unmask -> do
+    acquire (Resource m) = SafeT $ \istate -> lift $ mask $ \unmask -> do
         (a, close) <- unmask m
         close' <- register istate close
         return (a, lift close')
-    {-# INLINE decouple #-}
+    {-# INLINE acquire #-}
 
 
 ------------------------------------------------------------------------------
-runDecoupleT :: (MonadMutVar v i, MonadLift i m, MonadTry i, MonadTry m)
-    => DecoupleT v i m a
+runSafeT :: (MonadST v i, MonadLift i m, MonadTry i, MonadTry m)
+    => SafeT v i m a
     -> m a
-runDecoupleT (DecoupleT f :: DecoupleT v i m a) = do
+runSafeT (SafeT f :: SafeT v i m a) = do
     istate <- lift $ (newRef $ Finalizers 0 0 I.empty :: i (v (Finalizers i)))
     mask $ \unmask -> do
         lift $ stateAlloc istate
@@ -245,7 +243,7 @@ runDecoupleT (DecoupleT f :: DecoupleT v i m a) = do
 
 
 ------------------------------------------------------------------------------
-register :: (MonadMutVar v i, MonadMask i) => v (Finalizers i) -> i () -> i (i ())
+register :: (MonadST v i, MonadMask i) => v (Finalizers i) -> i () -> i (i ())
 register istate m = atomicModifyRef' istate $ \(Finalizers key ref im) ->
     (Finalizers (key + 1) ref (I.insert key m im), mask $ \unmask -> do
         action <- atomicModifyRef' istate (lookupAction key)
@@ -257,13 +255,13 @@ register istate m = atomicModifyRef' istate $ \(Finalizers key ref im) ->
 
 
 ------------------------------------------------------------------------------
-stateAlloc :: MonadMutVar v i => v (Finalizers i) -> i ()
+stateAlloc :: MonadST v i => v (Finalizers i) -> i ()
 stateAlloc istate = atomicModifyRef' istate $ \(Finalizers key ref im) ->
     (Finalizers key (ref + 1) im, ())
 
 
 ------------------------------------------------------------------------------
-stateCleanup :: (MonadMutVar v i, MonadTry i) => v (Finalizers i) -> i ()
+stateCleanup :: (MonadST v i, MonadTry i) => v (Finalizers i) -> i ()
 stateCleanup istate = mask_ $ do
     (ref, im) <- atomicModifyRef' istate $ \(Finalizers key ref im) -> do
         (Finalizers key (ref - 1) im, (ref - 1, im))

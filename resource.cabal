@@ -1,4 +1,4 @@
-name:           couple
+name:           resource
 version:        0.1
 synopsis:       A unification of bracket and ResourceT
 license:        BSD3
@@ -8,8 +8,8 @@ maintainer:     shane@duairc.com
 stability:      Experimental
 category:       Control
 cabal-version:  >= 1.6
-homepage:       http://github.com/duairc/couple
-bug-reports:    http://github.com/duairc/couple/issues
+homepage:       http://github.com/duairc/resource
+bug-reports:    http://github.com/duairc/resource/issues
 build-type:     Simple
 
 extra-source-files:
@@ -20,13 +20,13 @@ Library
     src
 
   exposed-modules:
-    Control.Monad.Interface.Decouple
-    Control.Monad.Trans.Couple
-    Control.Monad.Trans.Couple.Unsafe
-    Control.Monad.Trans.Decouple
+    Control.Monad.Interface.Safe
+    Control.Monad.Trans.Safe
+    Data.Resource
+    Data.Resource.Unsafe
 
   other-modules:
-    Control.Monad.Trans.Couple.Internal
+    Data.Resource.Internal
 
   build-depends:
     base >= 4.3 && < 5,
