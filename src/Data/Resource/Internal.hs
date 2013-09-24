@@ -31,7 +31,7 @@ import           Control.Monad.Layer
                      , layer
                      , layerInvmap
                      , MonadLayerFunctor
-                     layerMap
+                     , layerMap
 #if __GLASGOW_HASKELL__ >= 702
                      , MonadTrans
                      , type Outer
@@ -45,7 +45,6 @@ import           Control.Monad.Interface.Mask (mask)
 import           Control.Monad.Interface.Try
                      ( MonadTry
                      , bracket
-                     , finally
                      , onException
                      )
 
@@ -60,7 +59,7 @@ newtype Resource m a = Resource (m (a, m ()))
 
 
 ------------------------------------------------------------------------------
-instance MonadTry m => Functor (Resource m) where
+instance Monad m => Functor (Resource m) where
     fmap f (Resource m) = Resource $ liftM (first f) m
     {-# INLINE fmap #-}
 

@@ -7,6 +7,7 @@
 
 module Control.Monad.Interface.Safe
     ( MonadSafe (acquire)
+    , unsafeAcquire
     )
 where
 
@@ -24,7 +25,7 @@ import           Control.Monad.Layer
 
 
 -- resource ------------------------------------------------------------------
-import           Data.Resource (Resource)
+import           Data.Resource.Internal (Resource (Resource))
 
 
 ------------------------------------------------------------------------------
@@ -42,3 +43,9 @@ instance (MonadLayer m, MonadSafe i (Inner m), MonadLift i m) =>
   where
     acquire = layer . liftM (fmap layer) . acquire
     {-# INLINE acquire #-}
+
+
+------------------------------------------------------------------------------
+unsafeAcquire :: Monad m => Resource m a -> m (a, m ())
+unsafeAcquire (Resource m) = m
+{-# INLINE unsafeAcquire #-}

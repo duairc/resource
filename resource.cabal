@@ -23,7 +23,6 @@ Library
     Control.Monad.Interface.Safe
     Control.Monad.Trans.Safe
     Data.Resource
-    Data.Resource.Unsafe
 
   other-modules:
     Data.Resource.Internal
