@@ -12,7 +12,7 @@ where
 
 -- base ----------------------------------------------------------------------
 import           Control.Arrow (first)
-import           Control.Applicative (Applicative (pure, (<*>)))
+import           Control.Applicative (Applicative, pure, (<*>))
 import           Control.Concurrent (ThreadId)
 import           Control.Monad
                      ( liftM
@@ -21,17 +21,24 @@ import           Control.Monad
 #endif
                      )
 #if MIN_VERSION_base(4, 4, 0)
-import           Control.Monad.Zip (MonadZip (mzip, mzipWith, munzip))
+import           Control.Monad.Zip (MonadZip, mzip, mzipWith, munzip)
 #endif
 
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer
-                     ( MonadLayer (type Inner, layer, layerInvmap)
-                     , MonadLayerFunctor (layerMap)
+                     ( MonadLayer
+                     , type Inner
+                     , layer
+                     , layerInvmap
+                     , MonadLayerFunctor
+                     layerMap
 #if __GLASGOW_HASKELL__ >= 702
-                     , MonadTrans (type Outer, transInvmap)
-                     , MonadTransFunctor (transMap)
+                     , MonadTrans
+                     , type Outer
+                     , transInvmap
+                     , MonadTransFunctor
+                     , transMap
 #endif
                      )
 import           Control.Monad.Interface.Fork (MonadFork, fork, forkOn)
@@ -45,8 +52,8 @@ import           Control.Monad.Interface.Try
 
 
 -- transformers---------------------------------------------------------------
-import           Control.Monad.IO.Class (MonadIO (liftIO))
-import qualified Control.Monad.Trans.Class as T (MonadTrans (lift))
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import qualified Control.Monad.Trans.Class as T (MonadTrans, lift)
 
 
 ------------------------------------------------------------------------------

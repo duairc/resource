@@ -16,7 +16,9 @@ import           Control.Monad (liftM)
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer
-                     ( MonadLayer (type Inner, layer)
+                     ( MonadLayer
+                     , type Inner
+                     , layer
                      , MonadLift
                      )
 

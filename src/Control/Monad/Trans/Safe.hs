@@ -45,22 +45,30 @@ import           Control.Monad.IO.Class (MonadIO (liftIO))
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer
-                     ( MonadLayer (type Inner, layer, layerInvmap)
-                     , MonadLayerFunctor (layerMap)
+                     ( MonadLayer
+                     , type Inner
+                     , layer
+                     , layerInvmap
+                     , MonadLayerFunctor
+                     , layerMap
                      , MonadLayerControl
-                         ( type LayerState
-                         , restore
-                         , layerControl
-                         )
+                     , type LayerState
+                     , restore
+                     , layerControl
 #if __GLASGOW_HASKELL__ >= 702
-                     , MonadTrans (type Outer, transInvmap)
-                     , MonadTransFunctor (transMap)
-                     , MonadTransControl (transControl)
+                     , MonadTrans
+                     , type Outer
+                     , transInvmap
+                     , MonadTransFunctor
+                     , transMap
+                     , MonadTransControl
+                     , transControl
 #endif
-                     , MonadLift (lift)
+                     , MonadLift
+                     , lift
                      , controlLayer
                      )
-import           Control.Monad.Interface.Fork (MonadFork (fork, forkOn))
+import           Control.Monad.Interface.Fork (MonadFork, fork, forkOn)
 import           Control.Monad.Interface.Mask (MonadMask, mask, mask_)
 import           Control.Monad.Interface.ST
                      ( MonadST
@@ -72,7 +80,7 @@ import           Control.Monad.Interface.Try (MonadTry, finally, mtry)
 
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe (MonadSafe (acquire))
+import           Control.Monad.Interface.Safe (MonadSafe, acquire)
 import           Data.Resource.Internal (Resource (Resource))
 
 
