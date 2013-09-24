@@ -2,8 +2,7 @@ module Data.Resource
     ( Resource
     , resource
     , with
-    , withFork
-    , withForkOn
+    , forkWith
     )
 where
 
@@ -12,6 +11,5 @@ import           Data.Resource.Internal
                      ( Resource
                      , resource
                      , with
-                     , withFork
-                     , withForkOn
+                     , forkWith
                      )

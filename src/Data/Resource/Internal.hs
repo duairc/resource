@@ -5,8 +5,7 @@ module Data.Resource.Internal
     ( Resource (Resource)
     , resource
     , with
-    , withFork
-    , withForkOn
+    , forkWith
     )
 where
 
@@ -41,7 +40,7 @@ import           Control.Monad.Layer
                      , transMap
 #endif
                      )
-import           Control.Monad.Interface.Fork (MonadFork, fork, forkOn)
+import           Control.Monad.Interface.Fork (MonadFork, forkFinally)
 import           Control.Monad.Interface.Mask (mask)
 import           Control.Monad.Interface.Try
                      ( MonadTry
@@ -161,19 +160,9 @@ with (Resource m) = bracket m snd . (. fst)
 
 
 ------------------------------------------------------------------------------
-withFork :: (MonadTry m, MonadFork m)
+forkWith :: (MonadTry m, MonadFork m)
     => Resource m a
     -> (a -> m ())
     -> m ThreadId
-withFork (Resource m) f = mask $ \restore -> do
-    restore m >>= \(a, close) -> fork $ restore (f a) `finally` close
-
-
-------------------------------------------------------------------------------
-withForkOn :: (MonadTry m, MonadFork m)
-    => Resource m a
-    -> Int
-    -> (a -> m ())
-    -> m ThreadId
-withForkOn (Resource m) n f = mask $ \restore -> do
-    restore m >>= \(a, close) -> forkOn n $ restore (f a) `finally` close
+forkWith (Resource m) f = m >>= \(a, close) -> forkFinally (f a) (const close)
+{-# INLINABLE forkWith #-}
