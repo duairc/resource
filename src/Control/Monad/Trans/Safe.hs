@@ -88,11 +88,11 @@ import qualified Control.Monad.Interface.Safe.Internal (register)
 
 
 ------------------------------------------------------------------------------
-data Finalizers i = Finalizers !Int !Word !(IntMap (i ()))
+data ReleaseMap i = ReleaseMap !Int !Word !(IntMap (i ()))
 
 
 ------------------------------------------------------------------------------
-newtype SafeT v i m a = SafeT (v (Finalizers i) -> m a)
+newtype SafeT v i m a = SafeT (v (ReleaseMap i) -> m a)
 
 
 ------------------------------------------------------------------------------
@@ -245,35 +245,35 @@ runSafeT :: (MonadST v i, MonadLift i m, MonadTry i, MonadTry m)
     => SafeT v i m a
     -> m a
 runSafeT (SafeT f :: SafeT v i m a) = do
-    istate <- lift $ (newRef $ Finalizers 0 0 I.empty :: i (v (Finalizers i)))
+    istate <- lift $ (newRef $ ReleaseMap 0 0 I.empty :: i (v (ReleaseMap i)))
     mask $ \unmask -> do
         lift $ stateAlloc istate
         unmask (f istate) `finally` lift (stateCleanup istate)
 
 
 ------------------------------------------------------------------------------
-register :: (MonadST v i, MonadMask i) => v (Finalizers i) -> i () -> i (i ())
-register istate m = atomicModifyRef' istate $ \(Finalizers key ref im) ->
-    (Finalizers (key + 1) ref (I.insert key m im), mask $ \unmask -> do
+register :: (MonadST v i, MonadMask i) => v (ReleaseMap i) -> i () -> i (i ())
+register istate m = atomicModifyRef' istate $ \(ReleaseMap key ref im) ->
+    (ReleaseMap (key + 1) ref (I.insert key m im), mask $ \unmask -> do
         action <- atomicModifyRef' istate (lookupAction key)
         maybe (return ()) unmask action)
   where
-    lookupAction key rm@(Finalizers key' ref im) = case I.lookup key im of
+    lookupAction key rm@(ReleaseMap key' ref im) = case I.lookup key im of
         Nothing -> (rm, Nothing)
-        Just action -> (Finalizers key' ref $ I.delete key im, Just action)
+        Just action -> (ReleaseMap key' ref $ I.delete key im, Just action)
 
 
 ------------------------------------------------------------------------------
-stateAlloc :: MonadST v i => v (Finalizers i) -> i ()
-stateAlloc istate = atomicModifyRef' istate $ \(Finalizers key ref im) ->
-    (Finalizers key (ref + 1) im, ())
+stateAlloc :: MonadST v i => v (ReleaseMap i) -> i ()
+stateAlloc istate = atomicModifyRef' istate $ \(ReleaseMap key ref im) ->
+    (ReleaseMap key (ref + 1) im, ())
 
 
 ------------------------------------------------------------------------------
-stateCleanup :: (MonadST v i, MonadTry i) => v (Finalizers i) -> i ()
+stateCleanup :: (MonadST v i, MonadTry i) => v (ReleaseMap i) -> i ()
 stateCleanup istate = mask_ $ do
-    (ref, im) <- atomicModifyRef' istate $ \(Finalizers key ref im) -> do
-        (Finalizers key (ref - 1) im, (ref - 1, im))
+    (ref, im) <- atomicModifyRef' istate $ \(ReleaseMap key ref im) -> do
+        (ReleaseMap key (ref - 1) im, (ref - 1, im))
     when (ref == 0) $ do
         mapM_ mtry $ I.elems im
         writeRef istate $ undefined
