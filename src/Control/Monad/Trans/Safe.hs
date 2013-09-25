@@ -80,11 +80,11 @@ import           Control.Monad.Interface.Try (MonadTry, finally, mtry)
 
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe (MonadSafe)
-import qualified Control.Monad.Interface.Safe (MonadSafe, register)
-import           Control.Monad.Interface.Safe.ReleaseKey
-                     ( ReleaseKey (ReleaseKey)
+import           Control.Monad.Interface.Safe.Internal
+                     ( MonadSafe
+                     , ReleaseKey (ReleaseKey)
                      )
+import qualified Control.Monad.Interface.Safe.Internal (register)
 
 
 ------------------------------------------------------------------------------

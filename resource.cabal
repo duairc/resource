@@ -25,7 +25,7 @@ Library
     Data.Resource
 
   other-modules:
-    Control.Monad.Interface.Safe.ReleaseKey
+    Control.Monad.Interface.Safe.Internal
     Data.Resource.Internal
 
   build-depends:

@@ -1,15 +1,8 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverlappingInstances #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE UndecidableInstances #-}
-
 module Control.Monad.Interface.Safe
     ( MonadSafe (register)
     , ReleaseKey
-    , acquire
     , release
+    , acquire
     , unsafeAcquire
     )
 where
@@ -19,38 +12,18 @@ import           Control.Monad (liftM)
 
 
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Layer
-                     ( MonadLayer
-                     , type Inner
-                     , layer
-                     , MonadLift
-                     , lift
-                     )
+import           Control.Monad.Layer (MonadLift, lift)
 import           Control.Monad.Interface.Mask (MonadMask, mask)
 
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe.ReleaseKey
-                     ( ReleaseKey (ReleaseKey)
+import           Control.Monad.Interface.Safe.Internal
+                     ( MonadSafe
+                     , register
+                     , ReleaseKey (ReleaseKey)
+                     , release
                      )
 import           Data.Resource.Internal (Resource (Resource))
-
-
-------------------------------------------------------------------------------
-class (Monad i, Monad m, MonadLift i m) => MonadSafe i m where
-    register :: i () -> m (ReleaseKey i)
-
-
-------------------------------------------------------------------------------
-#if __GLASGOW_HASKELL__ >= 702
-instance (MonadLayer m, MonadSafe i (Inner m)) =>
-#else
-instance (MonadLayer m, MonadSafe i (Inner m), MonadLift i m) =>
-#endif
-    MonadSafe i m
-  where
-    register = layer . register
-    {-# INLINE register #-}
 
 
 ------------------------------------------------------------------------------
@@ -60,12 +33,6 @@ acquire (Resource m) = mask $ \unmask -> do
     key <- register close
     return (a, key)
 {-# INLINE acquire #-}
-
-
-------------------------------------------------------------------------------
-release :: MonadLift i m => ReleaseKey i -> m ()
-release (ReleaseKey m) = lift m
-{-# INLINE release #-}
 
 
 ------------------------------------------------------------------------------
