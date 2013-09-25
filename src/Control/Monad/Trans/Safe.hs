@@ -82,6 +82,9 @@ import           Control.Monad.Interface.Try (MonadTry, finally, mtry)
 -- resource ------------------------------------------------------------------
 import           Control.Monad.Interface.Safe (MonadSafe)
 import qualified Control.Monad.Interface.Safe (MonadSafe, register)
+import           Control.Monad.Interface.Safe.ReleaseKey
+                     ( ReleaseKey (ReleaseKey)
+                     )
 
 
 ------------------------------------------------------------------------------
@@ -233,7 +236,7 @@ instance (MonadST v i, MonadLift i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
     register close = SafeT $ \istate ->
-        lift $ liftM lift $ register istate close
+        lift $ liftM ReleaseKey $ register istate close
     {-# INLINE register #-}
 
 
