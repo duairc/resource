@@ -80,8 +80,8 @@ import           Control.Monad.Interface.Try (MonadTry, finally, mtry)
 
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe (MonadSafe, acquire)
-import           Data.Resource.Internal (Resource (Resource))
+import           Control.Monad.Interface.Safe (MonadSafe)
+import qualified Control.Monad.Interface.Safe (MonadSafe, register)
 
 
 ------------------------------------------------------------------------------
@@ -232,11 +232,9 @@ instance
 instance (MonadST v i, MonadLift i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
-    acquire (Resource m) = SafeT $ \istate -> lift $ mask $ \unmask -> do
-        (a, close) <- unmask m
-        close' <- register istate close
-        return (a, lift close')
-    {-# INLINE acquire #-}
+    register close = SafeT $ \istate ->
+        lift $ liftM lift $ register istate close
+    {-# INLINE register #-}
 
 
 ------------------------------------------------------------------------------
