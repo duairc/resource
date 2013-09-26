@@ -8,6 +8,11 @@ module Control.Monad.Interface.Safe
     , cancel
     , acquire
     , unsafeAcquire
+    , bracket
+    , bracket_
+    , bracketOnError
+    , finally
+    , onException
     )
 where
 
@@ -29,6 +34,11 @@ import           Control.Monad.Interface.Safe.Internal
                      , release
                      , release'
                      , cancel
+                     , bracket
+                     , bracket_
+                     , bracketOnError
+                     , finally
+                     , onException
                      )
 import           Data.Resource.Internal (Resource (Resource))
 
