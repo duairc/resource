@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -13,8 +12,13 @@ module Control.Monad.Interface.Safe.Internal
     , ReleaseKey (ReleaseKey)
     , release
     , release'
+    , cancel
     )
 where
+
+-- base ----------------------------------------------------------------------
+import           Control.Monad (liftM)
+
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer
@@ -24,6 +28,7 @@ import           Control.Monad.Layer
                      , MonadLift
                      , lift
                      )
+import           Control.Monad.Interface.Mask (MonadMask, mask_)
 
 
 ------------------------------------------------------------------------------
@@ -50,15 +55,21 @@ register m = register' m m
 
 
 ------------------------------------------------------------------------------
-data ReleaseKey m = ReleaseKey !(m ()) !(m ())
+newtype ReleaseKey m = ReleaseKey (m (m (), m ()))
 
 
 ------------------------------------------------------------------------------
-release :: MonadLift i m => ReleaseKey i -> m ()
-release (ReleaseKey _ s) = lift s
+release :: (MonadLift i m, MonadMask i) => ReleaseKey i -> m ()
+release (ReleaseKey m) = lift $ mask_ $ m >>= snd
 {-# INLINE release #-}
 
 
 ------------------------------------------------------------------------------
-release' :: MonadLift i m => ReleaseKey i -> m ()
-release' (ReleaseKey e _) = lift e
+release' :: (MonadLift i m, MonadMask i) => ReleaseKey i -> m ()
+release' (ReleaseKey m) = lift $ mask_ $ m >>= fst
+{-# INLINE release' #-}
+
+
+------------------------------------------------------------------------------
+cancel :: MonadLift i m => ReleaseKey i -> m ()
+cancel (ReleaseKey m) = lift $ liftM (const ()) m

@@ -262,14 +262,11 @@ register :: (MonadST v i, MonadMask i)
     -> i ()
     -> i (ReleaseKey i)
 register istate e s = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
-    (ReleaseMap (k + 1) ref (I.insert k (e, s) im), ReleaseKey
-        (mask $ \unmask -> lookupAction k >>= unmask . fst)
-        (mask $ \unmask -> lookupAction k >>= unmask . snd))
-  where
-    lookupAction k = atomicModifyRef' istate $ \rm@(ReleaseMap k' ref im) ->
-        case I.lookup k im of
+    ( ReleaseMap (k + 1) ref (I.insert k (e, s) im)
+    , ReleaseKey $ atomicModifyRef' istate $ \rm@(ReleaseMap k' ref' im') ->
+        case I.lookup k im' of
             Nothing -> (rm, (return (), return ()))
-            Just (r', s') -> (ReleaseMap k' ref $ I.delete k im, (r', s'))
+            Just m -> (ReleaseMap k' ref' $ I.delete k im', m))
 
 
 ------------------------------------------------------------------------------

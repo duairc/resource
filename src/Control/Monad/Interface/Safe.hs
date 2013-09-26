@@ -5,6 +5,7 @@ module Control.Monad.Interface.Safe
     , ReleaseKey
     , release
     , release'
+    , cancel
     , acquire
     , unsafeAcquire
     )
@@ -27,6 +28,7 @@ import           Control.Monad.Interface.Safe.Internal
                      , ReleaseKey (ReleaseKey)
                      , release
                      , release'
+                     , cancel
                      )
 import           Data.Resource.Internal (Resource (Resource))
 
@@ -42,5 +44,6 @@ acquire (Resource m) = mask_ $ do
 
 ------------------------------------------------------------------------------
 unsafeAcquire :: MonadLift i m => Resource i a -> m (a, ReleaseKey i)
-unsafeAcquire (Resource m) = lift $ liftM (\(a, e, s) -> (a, ReleaseKey e s)) m
+unsafeAcquire (Resource m) = lift $
+    liftM (\(a, e, s) -> (a, ReleaseKey (return (e, s)))) m
 {-# INLINE unsafeAcquire #-}
