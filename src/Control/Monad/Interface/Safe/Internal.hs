@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -7,9 +8,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Control.Monad.Interface.Safe.Internal
-    ( MonadSafe (register)
+    ( MonadSafe (register')
+    , register
     , ReleaseKey (ReleaseKey)
     , release
+    , release'
     )
 where
 
@@ -25,7 +28,7 @@ import           Control.Monad.Layer
 
 ------------------------------------------------------------------------------
 class MonadLift i m => MonadSafe i m where
-    register :: i () -> m (ReleaseKey i)
+    register' :: i () -> i () -> m (ReleaseKey i)
 
 
 ------------------------------------------------------------------------------
@@ -36,15 +39,26 @@ instance (MonadLayer m, MonadSafe i (Inner m), MonadLift i m) =>
 #endif
     MonadSafe i m
   where
-    register = layer . register
-    {-# INLINE register #-}
+    register' r s = layer (register' r s)
+    {-# INLINE register' #-}
 
 
 ------------------------------------------------------------------------------
-newtype ReleaseKey m = ReleaseKey (m ())
+register :: MonadSafe i m => i () -> m (ReleaseKey i)
+register m = register' m m
+{-# INLINE register #-}
+
+
+------------------------------------------------------------------------------
+data ReleaseKey m = ReleaseKey !(m ()) !(m ())
 
 
 ------------------------------------------------------------------------------
 release :: MonadLift i m => ReleaseKey i -> m ()
-release (ReleaseKey m) = lift m
+release (ReleaseKey r s) = lift s
 {-# INLINE release #-}
+
+
+------------------------------------------------------------------------------
+release' :: MonadLift i m => ReleaseKey i -> m ()
+release' (ReleaseKey r s) = lift r

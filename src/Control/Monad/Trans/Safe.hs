@@ -76,19 +76,18 @@ import           Control.Monad.Interface.ST
                      , newRef
                      , writeRef
                      )
-import           Control.Monad.Interface.Try (MonadTry, finally, mtry)
+import           Control.Monad.Interface.Try (MonadTry, mtry, onException)
 
 
 -- resource ------------------------------------------------------------------
 import           Control.Monad.Interface.Safe.Internal
-                     ( MonadSafe
+                     ( MonadSafe (register')
                      , ReleaseKey (ReleaseKey)
                      )
-import qualified Control.Monad.Interface.Safe.Internal (register)
 
 
 ------------------------------------------------------------------------------
-data ReleaseMap i = ReleaseMap !Int !Word !(IntMap (i ()))
+data ReleaseMap i = ReleaseMap !Int !Word !(IntMap (i (), i ()))
 
 
 ------------------------------------------------------------------------------
@@ -224,20 +223,23 @@ instance
   where
     fork (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
         lift $ stateAlloc istate
-        fork $ unmask (f istate) `finally` lift (stateCleanup istate)
+        fork $ do
+            unmask (f istate) `onException` lift (stateCleanup False istate)
+            lift (stateCleanup True istate)
 
     forkOn n (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
         lift $ stateAlloc istate
-        forkOn n $ unmask (f istate) `finally` lift (stateCleanup istate)
+        forkOn n $ do
+            unmask (f istate) `onException` lift (stateCleanup False istate)
+            lift (stateCleanup True istate)
 
 
 ------------------------------------------------------------------------------
 instance (MonadST v i, MonadLift i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
-    register close = SafeT $ \istate ->
-        lift $ liftM ReleaseKey $ register istate close
-    {-# INLINE register #-}
+    register' r s = SafeT $ \istate -> lift $ register istate r s
+    {-# INLINE register' #-}
 
 
 ------------------------------------------------------------------------------
@@ -248,32 +250,39 @@ runSafeT (SafeT f :: SafeT v i m a) = do
     istate <- lift $ (newRef $ ReleaseMap 0 0 I.empty :: i (v (ReleaseMap i)))
     mask $ \unmask -> do
         lift $ stateAlloc istate
-        unmask (f istate) `finally` lift (stateCleanup istate)
+        a <- unmask (f istate) `onException` lift (stateCleanup False istate)
+        lift $ stateCleanup True istate
+        return a
 
 
 ------------------------------------------------------------------------------
-register :: (MonadST v i, MonadMask i) => v (ReleaseMap i) -> i () -> i (i ())
-register istate m = atomicModifyRef' istate $ \(ReleaseMap key ref im) ->
-    (ReleaseMap (key + 1) ref (I.insert key m im), mask $ \unmask -> do
-        action <- atomicModifyRef' istate (lookupAction key)
-        maybe (return ()) unmask action)
+register :: (MonadST v i, MonadMask i)
+    => v (ReleaseMap i)
+    -> i ()
+    -> i ()
+    -> i (ReleaseKey i)
+register istate r s = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
+    (ReleaseMap (k + 1) ref (I.insert k (r, s) im), ReleaseKey
+        (mask $ \unmask -> lookupAction k >>= unmask . fst)
+        (mask $ \unmask -> lookupAction k >>= unmask . snd))
   where
-    lookupAction key rm@(ReleaseMap key' ref im) = case I.lookup key im of
-        Nothing -> (rm, Nothing)
-        Just action -> (ReleaseMap key' ref $ I.delete key im, Just action)
+    lookupAction k = atomicModifyRef' istate $ \rm@(ReleaseMap k' ref im) ->
+        case I.lookup k im of
+            Nothing -> (rm, (return (), return ()))
+            Just (r', s') -> (ReleaseMap k' ref $ I.delete k im, (r', s'))
 
 
 ------------------------------------------------------------------------------
 stateAlloc :: MonadST v i => v (ReleaseMap i) -> i ()
-stateAlloc istate = atomicModifyRef' istate $ \(ReleaseMap key ref im) ->
-    (ReleaseMap key (ref + 1) im, ())
+stateAlloc istate = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
+    (ReleaseMap k (ref + 1) im, ())
 
 
 ------------------------------------------------------------------------------
-stateCleanup :: (MonadST v i, MonadTry i) => v (ReleaseMap i) -> i ()
-stateCleanup istate = mask_ $ do
-    (ref, im) <- atomicModifyRef' istate $ \(ReleaseMap key ref im) -> do
-        (ReleaseMap key (ref - 1) im, (ref - 1, im))
+stateCleanup :: (MonadST v i, MonadTry i) => Bool -> v (ReleaseMap i) -> i ()
+stateCleanup success istate = mask_ $ do
+    (ref, im) <- atomicModifyRef' istate $ \(ReleaseMap k ref im) -> do
+        (ReleaseMap k (ref - 1) im, (ref - 1, im))
     when (ref == 0) $ do
-        mapM_ mtry $ I.elems im
+        mapM_ (mtry . if success then snd else fst) $ I.elems im
         writeRef istate $ undefined
