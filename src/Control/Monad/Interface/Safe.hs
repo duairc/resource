@@ -39,7 +39,7 @@ import           Data.Resource.Internal (Resource (Resource))
 ------------------------------------------------------------------------------
 acquire :: (MonadSafe i m, MonadMask m) => Resource i a -> m (a, ReleaseKey i)
 acquire (Resource m) = mask_ $ do
-    (a, e, s) <- lift m
-    key <- register' e s
+    (a, fin) <- lift m
+    key <- register' fin
     return (a, key)
 {-# INLINE acquire #-}

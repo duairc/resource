@@ -21,7 +21,7 @@ module Control.Monad.Interface.Safe.Internal
 where
 
 -- base ----------------------------------------------------------------------
-import           Control.Monad (liftM, join)
+import           Control.Monad (liftM)
 
 
 -- layers --------------------------------------------------------------------
@@ -35,9 +35,13 @@ import           Control.Monad.Layer
 import           Control.Monad.Interface.Mask (MonadMask, mask, mask_)
 
 
+-- resource ------------------------------------------------------------------
+import           Data.Resource.Internal (Finalizers (Finalizers, onSuccess))
+
+
 ------------------------------------------------------------------------------
 class MonadLift i m => MonadSafe i m where
-    register' :: i () -> i () -> m (ReleaseKey i)
+    register' :: Finalizers i -> m (ReleaseKey i)
 
 
 ------------------------------------------------------------------------------
@@ -48,23 +52,23 @@ instance (MonadLayer m, MonadSafe i (Inner m), MonadLift i m) =>
 #endif
     MonadSafe i m
   where
-    register' e s = layer (register' e s)
+    register' = layer . register'
     {-# INLINE register' #-}
 
 
 ------------------------------------------------------------------------------
 register :: MonadSafe i m => i () -> m (ReleaseKey i)
-register m = register' m m
+register m = register' (Finalizers m m)
 {-# INLINE register #-}
 
 
 ------------------------------------------------------------------------------
-newtype ReleaseKey m = ReleaseKey (m (m ()))
+newtype ReleaseKey m = ReleaseKey (m (Finalizers m))
 
 
 ------------------------------------------------------------------------------
 release :: (MonadLift i m, MonadMask m) => ReleaseKey i -> m ()
-release (ReleaseKey m) = mask_ $ lift $ join $ m
+release (ReleaseKey m) = mask_ $ lift $ m >>= onSuccess
 {-# INLINE release #-}
 
 

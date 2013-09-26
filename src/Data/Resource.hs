@@ -1,5 +1,6 @@
 module Data.Resource
     ( Resource (Resource, unsafeAcquire)
+    , Finalizers (Finalizers, onError, onSuccess)
     , resource
     , resource'
     , with
@@ -29,6 +30,7 @@ import           Control.Monad.Interface.Safe
 import           Control.Monad.Trans.Safe (SafeT, runSafeT)
 import           Data.Resource.Internal
                      ( Resource (Resource, unsafeAcquire)
+                     , Finalizers (Finalizers, onError, onSuccess)
                      , resource
                      , resource'
                      , with

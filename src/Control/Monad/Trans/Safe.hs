@@ -84,10 +84,13 @@ import           Control.Monad.Interface.Safe.Internal
                      ( MonadSafe (register')
                      , ReleaseKey (ReleaseKey)
                      )
+import           Data.Resource.Internal
+                     ( Finalizers (Finalizers, onError, onSuccess)
+                     )
 
 
 ------------------------------------------------------------------------------
-data ReleaseMap i = ReleaseMap !Int !Word !(IntMap (i (), i ()))
+data ReleaseMap i = ReleaseMap !Int !Word !(IntMap (Finalizers i))
 
 
 ------------------------------------------------------------------------------
@@ -238,7 +241,7 @@ instance
 instance (MonadST v i, MonadLift i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
-    register' e s = SafeT $ \istate -> lift $ register istate e s
+    register' fin = SafeT $ \istate -> lift $ register istate fin
     {-# INLINE register' #-}
 
 
@@ -258,15 +261,14 @@ runSafeT (SafeT f :: SafeT v i m a) = do
 ------------------------------------------------------------------------------
 register :: (MonadST v i, MonadMask i)
     => v (ReleaseMap i)
-    -> i ()
-    -> i ()
+    -> Finalizers i
     -> i (ReleaseKey i)
-register istate e s = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
-    ( ReleaseMap (k + 1) ref (I.insert k (e, s) im)
+register istate fin = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
+    ( ReleaseMap (k + 1) ref (I.insert k fin im)
     , ReleaseKey $ atomicModifyRef' istate $ \rm@(ReleaseMap k' ref' im') ->
         case I.lookup k im' of
-            Nothing -> (rm, (return ()))
-            Just (_, m) -> (ReleaseMap k' ref' $ I.delete k im', m))
+            Nothing -> (rm, Finalizers (return ()) (return ()))
+            Just fin' -> (ReleaseMap k' ref' $ I.delete k im', fin'))
 
 
 ------------------------------------------------------------------------------
@@ -281,5 +283,5 @@ stateCleanup success istate = mask_ $ do
     (ref, im) <- atomicModifyRef' istate $ \(ReleaseMap k ref im) -> do
         (ReleaseMap k (ref - 1) im, (ref - 1, im))
     when (ref == 0) $ do
-        mapM_ (mtry . if success then snd else fst) $ I.elems im
+        mapM_ (mtry . if success then onSuccess else onError) $ I.elems im
         writeRef istate $ undefined
