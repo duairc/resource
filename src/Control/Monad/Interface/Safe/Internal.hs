@@ -55,10 +55,10 @@ data ReleaseKey m = ReleaseKey !(m ()) !(m ())
 
 ------------------------------------------------------------------------------
 release :: MonadLift i m => ReleaseKey i -> m ()
-release (ReleaseKey r s) = lift s
+release (ReleaseKey _ s) = lift s
 {-# INLINE release #-}
 
 
 ------------------------------------------------------------------------------
 release' :: MonadLift i m => ReleaseKey i -> m ()
-release' (ReleaseKey r s) = lift r
+release' (ReleaseKey e _) = lift e

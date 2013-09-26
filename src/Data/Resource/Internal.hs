@@ -11,7 +11,6 @@ module Data.Resource.Internal
 where
 
 -- base ----------------------------------------------------------------------
-import           Control.Arrow (first)
 import           Control.Applicative (Applicative, pure, (<*>))
 import           Control.Concurrent (ThreadId)
 import           Control.Monad
@@ -61,7 +60,7 @@ newtype Resource m a = Resource (m (a, m (), m ()))
 
 ------------------------------------------------------------------------------
 instance Monad m => Functor (Resource m) where
-    fmap f (Resource m) = Resource $ liftM (\(a, r, s) -> (f a, r, s)) m
+    fmap f (Resource m) = Resource $ liftM (\(a, e, s) -> (f a, e, s)) m
     {-# INLINE fmap #-}
 
 
@@ -71,9 +70,9 @@ instance MonadTry m => Applicative (Resource m) where
     {-# INLINE pure #-}
 
     Resource mf <*> Resource ma = Resource $ do
-        (f, fr, fs) <- mf
-        (a, ar, as) <- ma `onException` fr
-        return (f a, finally ar fr, onException as fr >> fs)
+        (f, fe, fs) <- mf
+        (a, ae, as) <- ma `onException` fe
+        return (f a, finally ae fe, onException as fe >> fs)
     {-# INLINE (<*>) #-}
 
 
@@ -83,10 +82,10 @@ instance MonadTry m => Monad (Resource m) where
     {-# INLINE return #-}
 
     Resource ma >>= f = Resource $ do
-        (a, ar, as) <- ma
+        (a, ae, as) <- ma
         let Resource mb = f a
-        (b, br, bs) <- mb `onException` ar
-        return (b, onException br ar >> ar, onException bs ar >> as)
+        (b, be, bs) <- mb `onException` ae
+        return (b, onException be ae >> ae, onException bs ae >> as)
     {-# INLINE (>>=) #-}
 
     fail = layer . fail
@@ -117,7 +116,7 @@ instance MonadTry m => MonadLayer (Resource m) where
 ------------------------------------------------------------------------------
 instance MonadTry m => MonadLayerFunctor (Resource m) where
     layerMap f (Resource m) = Resource $
-        f (liftM (\(a, r, s) -> (a, f r, f s)) m)
+        f (liftM (\(a, e, s) -> (a, f e, f s)) m)
     {-# INLINE layerMap #-}
 
 
@@ -132,7 +131,7 @@ instance MonadTry m => MonadTrans (Resource m) where
 ------------------------------------------------------------------------------
 instance MonadTry m => MonadTransFunctor (Resource m) where
     transMap f (Resource m) = Resource $
-        f (liftM (\(a, r, s) -> (a, f r, f s)) m)
+        f (liftM (\(a, e, s) -> (a, f e, f s)) m)
     {-# INLINE transMap #-}
 #endif
 
@@ -162,8 +161,8 @@ resource' open onFailure onSuccess = Resource $
 
 ------------------------------------------------------------------------------
 with :: MonadTry m => Resource m a -> (a -> m b) -> m b
-with (Resource m) f = mask $ \restore -> m >>= \(a, r, s) ->
-    onException (restore (f a)) r >>= \b -> s >> return b
+with (Resource m) f = mask $ \restore -> m >>= \(a, e, s) ->
+    onException (restore (f a)) e >>= \b -> s >> return b
 {-# INLINABLE with #-}
 
 
@@ -172,6 +171,6 @@ forkWith :: (MonadTry m, MonadFork m)
     => Resource m a
     -> (a -> m ())
     -> m ThreadId
-forkWith (Resource m) f = mask $ \restore -> m >>= \(a, r, s) -> fork $
-    onException (restore (f a)) r >> s
+forkWith (Resource m) f = mask $ \restore -> m >>= \(a, e, s) -> fork $
+    onException (restore (f a)) e >> s
 {-# INLINABLE forkWith #-}

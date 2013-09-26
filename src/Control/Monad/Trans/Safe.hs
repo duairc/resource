@@ -238,7 +238,7 @@ instance
 instance (MonadST v i, MonadLift i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
-    register' r s = SafeT $ \istate -> lift $ register istate r s
+    register' e s = SafeT $ \istate -> lift $ register istate e s
     {-# INLINE register' #-}
 
 
@@ -261,8 +261,8 @@ register :: (MonadST v i, MonadMask i)
     -> i ()
     -> i ()
     -> i (ReleaseKey i)
-register istate r s = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
-    (ReleaseMap (k + 1) ref (I.insert k (r, s) im), ReleaseKey
+register istate e s = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
+    (ReleaseMap (k + 1) ref (I.insert k (e, s) im), ReleaseKey
         (mask $ \unmask -> lookupAction k >>= unmask . fst)
         (mask $ \unmask -> lookupAction k >>= unmask . snd))
   where
