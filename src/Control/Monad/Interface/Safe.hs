@@ -16,7 +16,7 @@ import           Control.Monad (liftM)
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer (MonadLift, lift)
-import           Control.Monad.Interface.Mask (MonadMask, mask)
+import           Control.Monad.Interface.Mask (MonadMask, mask_)
 
 
 -- resource ------------------------------------------------------------------
@@ -33,8 +33,8 @@ import           Data.Resource.Internal (Resource (Resource))
 
 ------------------------------------------------------------------------------
 acquire :: (MonadSafe i m, MonadMask m) => Resource i a -> m (a, ReleaseKey i)
-acquire (Resource m) = mask $ \unmask -> do
-    (a, r, s) <- unmask (lift m)
+acquire (Resource m) = mask_ $ do
+    (a, r, s) <- lift m
     key <- register' r s
     return (a, key)
 {-# INLINE acquire #-}

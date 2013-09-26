@@ -46,7 +46,6 @@ import           Control.Monad.Interface.Mask (mask)
 import           Control.Monad.Interface.Try
                      ( MonadTry
                      , finally
-                     , mtry
                      , onException
                      )
 
@@ -71,11 +70,10 @@ instance MonadTry m => Applicative (Resource m) where
     pure a = Resource (return (a, return (), return ()))
     {-# INLINE pure #-}
 
-    Resource mf <*> Resource ma = Resource $ mask $ \restore -> do
-        (f, fr, fs) <- restore mf
-        flip onException fr $ do
-            (a, ar, as) <- restore ma
-            return (f a, finally ar fr, onException as fr >> fs)
+    Resource mf <*> Resource ma = Resource $ do
+        (f, fr, fs) <- mf
+        (a, ar, as) <- ma `onException` fr
+        return (f a, finally ar fr, onException as fr >> fs)
     {-# INLINE (<*>) #-}
 
 
@@ -84,12 +82,11 @@ instance MonadTry m => Monad (Resource m) where
     return a = Resource (return (a, return (), return ()))
     {-# INLINE return #-}
 
-    Resource ma >>= f = Resource $ mask $ \restore -> do
-        (a, ar, as) <- restore ma
-        flip onException ar $ do
-            let Resource mb = f a
-            (b, br, bs) <- restore mb
-            return (b, onException br ar >> ar, onException bs ar >> as)
+    Resource ma >>= f = Resource $ do
+        (a, ar, as) <- ma
+        let Resource mb = f a
+        (b, br, bs) <- mb `onException` ar
+        return (b, onException br ar >> ar, onException bs ar >> as)
     {-# INLINE (>>=) #-}
 
     fail = layer . fail
@@ -165,7 +162,7 @@ resource' open onFailure onSuccess = Resource $
 
 ------------------------------------------------------------------------------
 with :: MonadTry m => Resource m a -> (a -> m b) -> m b
-with (Resource m) f = mask $ \restore -> restore m >>= \(a, r, s) ->
+with (Resource m) f = mask $ \restore -> m >>= \(a, r, s) ->
     onException (restore (f a)) r >>= \b -> s >> return b
 {-# INLINABLE with #-}
 
@@ -175,6 +172,6 @@ forkWith :: (MonadTry m, MonadFork m)
     => Resource m a
     -> (a -> m ())
     -> m ThreadId
-forkWith (Resource m) f = m >>= \(a, r, s) -> mask $ \restore -> fork $
-    mtry (restore (f a)) >>= either (const r) (const s)
+forkWith (Resource m) f = mask $ \restore -> m >>= \(a, r, s) -> fork $
+    onException (restore (f a)) r >> s
 {-# INLINABLE forkWith #-}
