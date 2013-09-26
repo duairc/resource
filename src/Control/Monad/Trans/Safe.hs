@@ -265,8 +265,8 @@ register istate e s = atomicModifyRef' istate $ \(ReleaseMap k ref im) ->
     ( ReleaseMap (k + 1) ref (I.insert k (e, s) im)
     , ReleaseKey $ atomicModifyRef' istate $ \rm@(ReleaseMap k' ref' im') ->
         case I.lookup k im' of
-            Nothing -> (rm, (return (), return ()))
-            Just m -> (ReleaseMap k' ref' $ I.delete k im', m))
+            Nothing -> (rm, (return ()))
+            Just (_, m) -> (ReleaseMap k' ref' $ I.delete k im', m))
 
 
 ------------------------------------------------------------------------------

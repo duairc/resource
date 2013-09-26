@@ -11,7 +11,6 @@ module Control.Monad.Interface.Safe.Internal
     , register
     , ReleaseKey (ReleaseKey)
     , release
-    , release'
     , cancel
     , bracket
     , bracket_
@@ -22,7 +21,7 @@ module Control.Monad.Interface.Safe.Internal
 where
 
 -- base ----------------------------------------------------------------------
-import           Control.Monad (liftM)
+import           Control.Monad (liftM, join)
 
 
 -- layers --------------------------------------------------------------------
@@ -33,7 +32,7 @@ import           Control.Monad.Layer
                      , MonadLift
                      , lift
                      )
-import           Control.Monad.Interface.Mask (MonadMask, mask_)
+import           Control.Monad.Interface.Mask (MonadMask, mask, mask_)
 
 
 ------------------------------------------------------------------------------
@@ -49,7 +48,7 @@ instance (MonadLayer m, MonadSafe i (Inner m), MonadLift i m) =>
 #endif
     MonadSafe i m
   where
-    register' r s = layer (register' r s)
+    register' e s = layer (register' e s)
     {-# INLINE register' #-}
 
 
@@ -60,19 +59,13 @@ register m = register' m m
 
 
 ------------------------------------------------------------------------------
-newtype ReleaseKey m = ReleaseKey (m (m (), m ()))
+newtype ReleaseKey m = ReleaseKey (m (m ()))
 
 
 ------------------------------------------------------------------------------
-release :: (MonadLift i m, MonadMask i) => ReleaseKey i -> m ()
-release (ReleaseKey m) = lift $ mask_ $ m >>= snd
+release :: (MonadLift i m, MonadMask m) => ReleaseKey i -> m ()
+release (ReleaseKey m) = mask_ $ lift $ join $ m
 {-# INLINE release #-}
-
-
-------------------------------------------------------------------------------
-release' :: (MonadLift i m, MonadMask i) => ReleaseKey i -> m ()
-release' (ReleaseKey m) = lift $ mask_ $ m >>= fst
-{-# INLINE release' #-}
 
 
 ------------------------------------------------------------------------------
@@ -123,7 +116,7 @@ bracketOnError before after run = mask $ \unmask -> do
 -- | Analogous to 'Control.Monad.Interface.Try.finally' from
 -- "Control.Monad.Interface.Try", except this also protects against premature
 -- termination (e.g., when using @pipes@).
-finally :: MonadSafe i m => m a -> i b -> m a
+finally :: (MonadMask m, MonadSafe i m) => m a -> i b -> m a
 finally m sequel = do
     key <- register (sequel >> return ())
     a <- m

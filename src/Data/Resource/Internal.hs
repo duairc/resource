@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Data.Resource.Internal
-    ( Resource (Resource)
+    ( Resource (Resource, unsafeAcquire)
     , resource
     , resource'
     , with
@@ -55,7 +55,7 @@ import qualified Control.Monad.Trans.Class as T (MonadTrans, lift)
 
 
 ------------------------------------------------------------------------------
-newtype Resource m a = Resource (m (a, m (), m ()))
+newtype Resource m a = Resource { unsafeAcquire :: m (a, m (), m ()) }
 
 
 ------------------------------------------------------------------------------

@@ -4,10 +4,8 @@ module Control.Monad.Interface.Safe
     , register'
     , ReleaseKey
     , release
-    , release'
     , cancel
     , acquire
-    , unsafeAcquire
     , bracket
     , bracket_
     , bracketOnError
@@ -15,10 +13,6 @@ module Control.Monad.Interface.Safe
     , onException
     )
 where
-
--- base ----------------------------------------------------------------------
-import           Control.Monad (liftM)
-
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Layer (MonadLift, lift)
@@ -30,9 +24,8 @@ import           Control.Monad.Interface.Safe.Internal
                      ( MonadSafe
                      , register
                      , register'
-                     , ReleaseKey (ReleaseKey)
+                     , ReleaseKey
                      , release
-                     , release'
                      , cancel
                      , bracket
                      , bracket_
@@ -50,10 +43,3 @@ acquire (Resource m) = mask_ $ do
     key <- register' e s
     return (a, key)
 {-# INLINE acquire #-}
-
-
-------------------------------------------------------------------------------
-unsafeAcquire :: MonadLift i m => Resource i a -> m (a, ReleaseKey i)
-unsafeAcquire (Resource m) = lift $
-    liftM (\(a, e, s) -> (a, ReleaseKey (return (e, s)))) m
-{-# INLINE unsafeAcquire #-}
