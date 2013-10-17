@@ -20,13 +20,13 @@ Library
     src
 
   exposed-modules:
-    Control.Monad.Interface.Safe
     Control.Monad.Trans.Safe
     Data.Resource
     Data.Resource.Base
+    Monad.Safe
 
   other-modules:
-    Control.Monad.Interface.Safe.Internal
+    Monad.Safe.Internal
     Data.Resource.Internal
 
   build-depends:

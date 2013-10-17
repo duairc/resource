@@ -18,15 +18,6 @@ module Data.Resource
 where
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe
-                     ( MonadSafe
-                     , register
-                     , register'
-                     , acquire
-                     , ReleaseKey
-                     , release
-                     , cancel
-                     )
 import           Control.Monad.Trans.Safe (SafeT, runSafeT)
 import           Data.Resource.Internal
                      ( Resource (Resource, unsafeAcquire)
@@ -35,4 +26,13 @@ import           Data.Resource.Internal
                      , resource'
                      , with
                      , forkWith
+                     )
+import           Monad.Safe
+                     ( MonadSafe
+                     , register
+                     , register'
+                     , acquire
+                     , ReleaseKey
+                     , release
+                     , cancel
                      )

@@ -80,7 +80,7 @@ import           System.IO (Handle, IOMode, hClose, openBinaryFile, openFile)
 
 
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Layer (layer)
+import           Control.Monad.Lift (lift)
 
 
 -- resource ------------------------------------------------------------------
@@ -159,7 +159,7 @@ array0 = array . (+1)
 
 ------------------------------------------------------------------------------
 marshal :: Storable a => a -> Resource IO (Ptr a)
-marshal a = ptr >>= \p -> layer (poke p a) >> return p
+marshal a = ptr >>= \p -> lift (poke p a) >> return p
 
 
 ------------------------------------------------------------------------------
@@ -176,7 +176,7 @@ marshalArray0 a as = fmap fst (marshalArrayLen0 a as)
 marshalArrayLen :: Storable a => [a] -> Resource IO (Ptr a, Int)
 marshalArrayLen as = do
     p <- array size
-    layer $ pokeArray p as
+    lift $ pokeArray p as
     return (p, size)
   where
     size = length as
@@ -186,7 +186,7 @@ marshalArrayLen as = do
 marshalArrayLen0 :: Storable a => a -> [a] -> Resource IO (Ptr a, Int)
 marshalArrayLen0 a as = do
     p <- array0 size
-    layer $ pokeArray0 a p as
+    lift $ pokeArray0 a p as
     return (p, size)
   where
     size = length as
@@ -208,7 +208,7 @@ castring s = do
     p <- array (length s)
     let go [] n = pokeElemOff p n 0
         go (c:cs) !n = pokeElemOff p n (castCharToCChar c) >> go cs (n + 1)
-    layer $ go s 0
+    lift $ go s 0
     return p
 
 
@@ -218,7 +218,7 @@ castringLen s = do
     p <- array size
     let go [] _ = return ()
         go (c:cs) !n = pokeElemOff p n (castCharToCChar c) >> go cs (n + 1)
-    layer $ go s 0
+    lift $ go s 0
     return (p, size)
   where
     size = length s

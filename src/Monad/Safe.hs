@@ -1,4 +1,4 @@
-module Control.Monad.Interface.Safe
+module Monad.Safe
     ( MonadSafe
     , register
     , register'
@@ -15,12 +15,12 @@ module Control.Monad.Interface.Safe
 where
 
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Layer (MonadLift, lift)
-import           Control.Monad.Interface.Mask (MonadMask, mask_)
+import           Control.Monad.Lift (MonadLift, lift')
+import           Monad.Mask (MonadMask, mask_)
 
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe.Internal
+import           Monad.Safe.Internal
                      ( MonadSafe
                      , register
                      , register'
@@ -39,7 +39,7 @@ import           Data.Resource.Internal (Resource (Resource))
 ------------------------------------------------------------------------------
 acquire :: (MonadSafe i m, MonadMask m) => Resource i a -> m (a, ReleaseKey i)
 acquire (Resource m) = mask_ $ do
-    (a, fin) <- lift m
+    (a, fin) <- lift' m
     key <- register' fin
     return (a, key)
 {-# INLINE acquire #-}

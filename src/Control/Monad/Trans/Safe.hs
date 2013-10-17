@@ -39,48 +39,37 @@ import qualified Data.IntMap as I
 
 
 -- transformers --------------------------------------------------------------
-import qualified Control.Monad.Trans.Class as T (MonadTrans (lift))
 import           Control.Monad.IO.Class (MonadIO (liftIO))
+import           Data.Functor.Identity (Identity (Identity))
 
 
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Layer
-                     ( MonadLayer
-                     , type Inner
-                     , layer
-                     , layerInvmap
-                     , MonadLayerFunctor
-                     , layerMap
-                     , MonadLayerControl
-                     , type LayerState
-                     , restore
-                     , layerControl
-#if __GLASGOW_HASKELL__ >= 702
-                     , MonadTrans
-                     , type Outer
-                     , transInvmap
-                     , MonadTransFunctor
-                     , transMap
-                     , MonadTransControl
-                     , transControl
-#endif
-                     , MonadLift
+import           Control.Monad.Lift
+                     ( MonadTrans
                      , lift
-                     , controlLayer
+                     , MonadTransControl
+                     , type LayerResult
+                     , type LayerState
+                     , peel
+                     , restore
+                     , suspend
+                     , extract
+                     , control
+                     , MInvariant
+                     , hoistiso
+                     , MFunctor
+                     , hoist
+                     , MonadLift
+                     , lift'
                      )
-import           Control.Monad.Interface.Fork (MonadFork, fork, forkOn)
-import           Control.Monad.Interface.Mask (MonadMask, mask, mask_)
-import           Control.Monad.Interface.ST
-                     ( MonadST
-                     , atomicModifyRef'
-                     , newRef
-                     , writeRef
-                     )
-import           Control.Monad.Interface.Try (MonadTry, mtry, onException)
+import           Monad.Fork (MonadFork, fork, forkOn)
+import           Monad.Mask (MonadMask, mask, mask_)
+import           Monad.ST (MonadST, atomicModifyRef', newRef, writeRef)
+import           Monad.Try (MonadTry, mtry, onException)
 
 
 -- resource ------------------------------------------------------------------
-import           Control.Monad.Interface.Safe.Internal
+import           Monad.Safe.Internal
                      ( MonadSafe (register')
                      , ReleaseKey (ReleaseKey)
                      )
@@ -98,119 +87,86 @@ newtype SafeT v i m a = SafeT (v (ReleaseMap i) -> m a)
 
 
 ------------------------------------------------------------------------------
-instance T.MonadTrans (SafeT v i) where
-    lift = layer
-    {-# INLINE lift #-}
+instance MonadTrans (SafeT v i) where
+    lift = SafeT . const
+
+
+------------------------------------------------------------------------------
+instance MonadTransControl (SafeT v i) where
+#if __GLASGOW_HASKELL__ >= 704
+    type LayerResult (SafeT v i) = Identity
+    type LayerState (SafeT v i) m = v (ReleaseMap i)
+    peel (SafeT f) istate = liftM (\a -> (Identity a, istate)) (f istate)
+    restore (Identity a, _) = return a
+    suspend = SafeT $ \istate -> return istate
+    extract _ (Identity a) = Just a
+#else
+    newtype LayerResult (SafeT v i) a = R a
+    newtype LayerState (SafeT v i) m = S (v (ReleaseKey i))
+    peel (SafeT m) (S r) = liftM (\a -> (R a, S r)) (m r)
+    restore (R a, _) = SafeT $ \_ -> return a
+    suspend = SafeT $ \r -> return (S r)
+    extract _ (R a) = Just a
+#endif
+
+
+------------------------------------------------------------------------------
+instance MInvariant (SafeT v i) where
+    hoistiso f _ = hoist f
+
+
+------------------------------------------------------------------------------
+instance MFunctor (SafeT v i) where
+    hoist f (SafeT m) = SafeT $ f . m
 
 
 ------------------------------------------------------------------------------
 instance Monad m => Functor (SafeT v i m) where
     fmap = liftM
-    {-# INLINE fmap #-}
 
 
 ------------------------------------------------------------------------------
 instance Monad m => Applicative (SafeT v i m) where
     pure = return
-    {-# INLINE pure #-}
     (<*>) = ap
-    {-# INLINE (<*>) #-}
 
 
 ------------------------------------------------------------------------------
 instance MonadPlus m => Alternative (SafeT v i m) where
     empty = mzero
-    {-# INLINE empty #-}
     (<|>) = mplus
-    {-# INLINE (<|>) #-}
 
 
 ------------------------------------------------------------------------------
 instance Monad m => Monad (SafeT v i m) where
-    return = layer . return
-    {-# INLINE return #-}
-    SafeT m >>= f = SafeT $ \r -> m r >>= \a ->
-        let SafeT m' = f a in m' r
-    {-# INLINE (>>=) #-}
-    fail = layer . fail
-    {-# INLINE fail #-}
+    return = lift . return
+    SafeT m >>= f = SafeT $ \r -> m r >>= \a -> let SafeT m' = f a in m' r
+    fail = lift . fail
 
 
 ------------------------------------------------------------------------------
 instance MonadPlus m => MonadPlus (SafeT v i m) where
-    mzero = layer mzero
-    {-# INLINE mzero #-}
-    mplus a b = controlLayer (\run -> mplus (run a) (run b))
-    {-# INLINE mplus #-}
+    mzero = lift mzero
+    mplus a b = control (\run -> mplus (run a) (run b))
 
 
 ------------------------------------------------------------------------------
 instance MonadFix m => MonadFix (SafeT v i m) where
-    mfix f = controlLayer (\run -> mfix (\a -> run (restore a >>= f)))
-    {-# INLINE mfix #-}
+    mfix f = control (\run -> mfix (\a -> run (restore a >>= f)))
 
 
 #if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
 instance MonadZip m => MonadZip (SafeT v i m) where
     mzipWith f = liftM2 f
-    {-# INLINE mzipWith #-}
     mzip = liftM2 (,)
-    {-# INLINE mzip #-}
     munzip m = (liftM fst m, liftM snd m)
-    {-# INLINE munzip #-}
 #endif
 
 
 ------------------------------------------------------------------------------
 instance MonadIO m => MonadIO (SafeT v i m) where
-    liftIO = layer . liftIO
-    {-# INLINE liftIO #-}
-
-
-------------------------------------------------------------------------------
-instance Monad m => MonadLayer (SafeT v i m) where
-    type Inner (SafeT v i m) = m
-    layer = SafeT . const
-    {-# INLINE layer #-}
-    layerInvmap (f, _) = layerMap f
-    {-# INLINE layerInvmap #-}
-
-
-------------------------------------------------------------------------------
-instance Monad m => MonadLayerFunctor (SafeT v i m) where
-    layerMap f (SafeT m) = SafeT $ f . m
-    {-# INLINE layerMap #-}
-
-
-------------------------------------------------------------------------------
-instance Monad m => MonadLayerControl (SafeT v i m) where
-    newtype LayerState (SafeT v i m) a = L {unL :: a}
-    restore = SafeT . const . return . unL
-    {-# INLINE restore #-}
-    layerControl f = SafeT $ \r -> f $ \(SafeT t) -> liftM L $ t r
-    {-# INLINE layerControl #-}
-
-
-#if __GLASGOW_HASKELL__ >= 702
-------------------------------------------------------------------------------
-instance Monad m => MonadTrans (SafeT v i m) where
-    type Outer (SafeT v i m) = SafeT v i
-    transInvmap (f, _) = transMap f
-    {-# INLINE transInvmap #-}
-
-
-------------------------------------------------------------------------------
-instance Monad m => MonadTransFunctor (SafeT v i m) where
-    transMap f (SafeT m) = SafeT $ f . m
-    {-# INLINE transMap #-}
-
-
-------------------------------------------------------------------------------
-instance Monad m => MonadTransControl (SafeT v i m) where
-    transControl f = SafeT $ \r -> f $ \(SafeT t) -> liftM L $ t r
-    {-# INLINE transControl #-}
-#endif
+    liftIO = lift . liftIO
 
 
 ------------------------------------------------------------------------------
@@ -225,23 +181,23 @@ instance
     MonadFork (SafeT v i m)
   where
     fork (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
-        lift $ stateAlloc istate
+        lift' $ stateAlloc istate
         fork $ do
-            unmask (f istate) `onException` lift (stateCleanup False istate)
-            lift (stateCleanup True istate)
+            unmask (f istate) `onException` lift' (stateCleanup False istate)
+            lift' (stateCleanup True istate)
 
     forkOn n (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
-        lift $ stateAlloc istate
+        lift' $ stateAlloc istate
         forkOn n $ do
-            unmask (f istate) `onException` lift (stateCleanup False istate)
-            lift (stateCleanup True istate)
+            unmask (f istate) `onException` lift' (stateCleanup False istate)
+            lift' (stateCleanup True istate)
 
 
 ------------------------------------------------------------------------------
 instance (MonadST v i, MonadLift i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
-    register' fin = SafeT $ \istate -> lift $ register istate fin
+    register' fin = SafeT $ \istate -> lift' $ register istate fin
     {-# INLINE register' #-}
 
 
@@ -250,11 +206,11 @@ runSafeT :: (MonadST v i, MonadLift i m, MonadTry i, MonadTry m)
     => SafeT v i m a
     -> m a
 runSafeT (SafeT f :: SafeT v i m a) = do
-    istate <- lift $ (newRef $ ReleaseMap 0 0 I.empty :: i (v (ReleaseMap i)))
+    istate <- lift' $ (newRef $ ReleaseMap 0 0 I.empty :: i (v (ReleaseMap i)))
     mask $ \unmask -> do
-        lift $ stateAlloc istate
-        a <- unmask (f istate) `onException` lift (stateCleanup False istate)
-        lift $ stateCleanup True istate
+        lift' $ stateAlloc istate
+        a <- unmask (f istate) `onException` lift' (stateCleanup False istate)
+        lift' $ stateCleanup True istate
         return a
 
 

@@ -28,33 +28,21 @@ import           Data.Monoid (Monoid, mempty, mappend)
 
 
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Layer
-                     ( MonadLayer
-                     , type Inner
-                     , layer
-                     , layerInvmap
-                     , MonadLayerFunctor
-                     , layerMap
-#if __GLASGOW_HASKELL__ >= 702
-                     , MonadTrans
-                     , type Outer
-                     , transInvmap
-                     , MonadTransFunctor
-                     , transMap
-#endif
+import           Control.Monad.Lift
+                     ( MonadTrans
+                     , lift
+                     , MInvariant
+                     , hoistiso
+                     , MFunctor
+                     , hoist
                      )
-import           Control.Monad.Interface.Fork (MonadFork, fork)
-import           Control.Monad.Interface.Mask (mask)
-import           Control.Monad.Interface.Try
-                     ( MonadTry
-                     , finally
-                     , onException
-                     )
+import           Monad.Fork (MonadFork, fork)
+import           Monad.Mask (mask)
+import           Monad.Try (MonadTry, finally, onException)
 
 
 -- transformers---------------------------------------------------------------
 import           Control.Monad.IO.Class (MonadIO, liftIO)
-import qualified Control.Monad.Trans.Class as T (MonadTrans, lift)
 
 
 ------------------------------------------------------------------------------
@@ -74,86 +62,53 @@ newtype Resource m a = Resource { unsafeAcquire :: m (a, Finalizers m) }
 
 
 ------------------------------------------------------------------------------
+instance MonadTrans Resource where
+    lift = Resource . liftM (\a -> (a, Finalizers (return ()) (return ())))
+
+
+------------------------------------------------------------------------------
+instance MInvariant Resource where
+    hoistiso f _ = hoist f
+
+
+------------------------------------------------------------------------------
+instance MFunctor Resource where
+    hoist f (Resource m) = Resource $
+        f (liftM (\(a, Finalizers e s) -> (a, Finalizers (f e) (f s))) m)
+
+
+------------------------------------------------------------------------------
 instance Monad m => Functor (Resource m) where
     fmap f (Resource m) = Resource $ liftM (first f) m
-    {-# INLINE fmap #-}
 
 
 ------------------------------------------------------------------------------
 instance MonadTry m => Applicative (Resource m) where
     pure a = Resource (return (a, mempty))
-    {-# INLINE pure #-}
-
     Resource mf <*> Resource ma = Resource $ do
         (f, fin_f) <- mf
         (a, fin_a) <- ma `onException` onError fin_f
         return (f a, fin_a `mappend` fin_f)
-    {-# INLINE (<*>) #-}
 
 
 ------------------------------------------------------------------------------
 instance MonadTry m => Monad (Resource m) where
     return a = Resource (return (a, mempty))
-    {-# INLINE return #-}
-
     Resource ma >>= f = Resource $ do
         (a, fin_a) <- ma
         let Resource mb = f a
         (b, fin_b) <- mb `onException` onError fin_a
         return (b, fin_b `mappend` fin_a)
-    {-# INLINE (>>=) #-}
-
-    fail = layer . fail
-    {-# INLINE fail #-}
+    fail = lift . fail
 
 
 #if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
 instance (MonadTry m, MonadZip m) => MonadZip (Resource m) where
     mzipWith = liftM2
-    {-# INLINE mzipWith #-}
     mzip = liftM2 (,)
-    {-# INLINE mzip #-}
     munzip m = (liftM fst m, liftM snd m)
-    {-# INLINE munzip #-}
 #endif
-
-
-------------------------------------------------------------------------------
-instance MonadTry m => MonadLayer (Resource m) where
-    type Inner (Resource m) = m
-    layer = Resource . liftM (\a -> (a, mempty))
-    {-# INLINE layer #-}
-    layerInvmap (f, _) = layerMap f
-    {-# INLINE layerInvmap #-}
-
-
-------------------------------------------------------------------------------
-instance MonadTry m => MonadLayerFunctor (Resource m) where
-    layerMap f (Resource m) = Resource $
-        f (liftM (\(a, Finalizers e s) -> (a, Finalizers (f e) (f s))) m)
-    {-# INLINE layerMap #-}
-
-
-#if __GLASGOW_HASKELL__ >= 702
-------------------------------------------------------------------------------
-instance MonadTry m => MonadTrans (Resource m) where
-    type Outer (Resource m) = Resource
-    transInvmap (f, _) = transMap f
-    {-# INLINE transInvmap #-}
-
-
-------------------------------------------------------------------------------
-instance MonadTry m => MonadTransFunctor (Resource m) where
-    transMap f (Resource m) = Resource $
-        f (liftM (\(a, Finalizers e s) -> (a, Finalizers (f e) (f s))) m)
-    {-# INLINE transMap #-}
-#endif
-
-
-------------------------------------------------------------------------------
-instance T.MonadTrans Resource where
-    lift = Resource . liftM (\a -> (a, Finalizers (return ()) (return ())))
 
 
 ------------------------------------------------------------------------------
