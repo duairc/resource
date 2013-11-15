@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverlappingInstances #-}
@@ -24,9 +23,18 @@ where
 import           Control.Monad (liftM)
 
 
+-- mmorph --------------------------------------------------------------------
+import           Control.Monad.Trans.Compose (ComposeT (ComposeT))
+
+
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Lift (MonadTrans, lift, MonadLift, lift')
+import           Control.Monad.Lift (MonadInner, liftI)
+import           Control.Monad.Lift.Top (MonadTop, liftT)
 import           Monad.Mask (MonadMask, mask, mask_)
+
+
+-- transformers --------------------------------------------------------------
+import           Data.Functor.Product (Product (Pair))
 
 
 -- resource ------------------------------------------------------------------
@@ -34,15 +42,25 @@ import           Data.Resource.Internal (Finalizers (Finalizers, onSuccess))
 
 
 ------------------------------------------------------------------------------
-class MonadLift i m => MonadSafe i m where
+class MonadInner i m => MonadSafe i m where
     register' :: Finalizers i -> m (ReleaseKey i)
 
 
 ------------------------------------------------------------------------------
-instance (MonadTrans t, MonadSafe i m, MonadLift i (t m)) =>
+instance (MonadSafe i f, MonadSafe i g) => MonadSafe i (Pair f g) where
+    register' f = Pair (register' f) (register' f)
+
+
+------------------------------------------------------------------------------
+instance MonadSafe i (f (g m)) => MonadSafe i (ComposeT f g m) where
+    register' = ComposeT . register'
+
+
+------------------------------------------------------------------------------
+instance (MonadTop t m, MonadSafe i m, MonadInner i (t m)) =>
     MonadSafe i (t m)
   where
-    register' = lift . register'
+    register' = liftT . register'
 
 
 ------------------------------------------------------------------------------
@@ -55,13 +73,13 @@ newtype ReleaseKey m = ReleaseKey (m (Finalizers m))
 
 
 ------------------------------------------------------------------------------
-release :: (MonadLift i m, MonadMask m) => ReleaseKey i -> m ()
-release (ReleaseKey m) = mask_ $ lift' $ m >>= onSuccess
+release :: (MonadInner i m, MonadMask m) => ReleaseKey i -> m ()
+release (ReleaseKey m) = mask_ $ liftI $ m >>= onSuccess
 
 
 ------------------------------------------------------------------------------
-cancel :: MonadLift i m => ReleaseKey i -> m ()
-cancel (ReleaseKey m) = lift' $ liftM (const ()) m
+cancel :: MonadInner i m => ReleaseKey i -> m ()
+cancel (ReleaseKey m) = liftI $ liftM (const ()) m
 
 
 ------------------------------------------------------------------------------
@@ -72,9 +90,9 @@ bracket :: (MonadMask m, MonadSafe i m)
     -> (a -> i b)
     -> (a -> m c)
     -> m c
-bracket before after run = mask $ \unmask -> do
-    a <- lift' before
-    unmask (run a) `finally` after a
+bracket before after run = mask $ \restore -> do
+    a <- liftI before
+    restore (run a) `finally` after a
 {-# INLINABLE bracket #-}
 
 
@@ -94,9 +112,9 @@ bracketOnError :: (MonadMask m, MonadSafe i m)
     -> (a -> i b)
     -> (a -> m c)
     -> m c
-bracketOnError before after run = mask $ \unmask -> do
-    a <- lift' before
-    unmask (run a) `onException` after a
+bracketOnError before after run = mask $ \restore -> do
+    a <- liftI before
+    restore (run a) `onException` after a
 {-# INLINABLE bracketOnError #-}
 
 

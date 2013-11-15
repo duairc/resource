@@ -50,17 +50,17 @@ import           Control.Monad.Lift
                      , MonadTransControl
                      , type LayerResult
                      , type LayerState
-                     , peel
-                     , restore
                      , suspend
+                     , resume
+                     , capture
                      , extract
                      , control
                      , MInvariant
                      , hoistiso
                      , MFunctor
                      , hoist
-                     , MonadLift
-                     , lift'
+                     , MonadInner
+                     , liftI
                      )
 import           Monad.Fork (MonadFork, fork, forkOn)
 import           Monad.Mask (MonadMask, mask, mask_)
@@ -94,19 +94,21 @@ instance MonadTrans (SafeT v i) where
 ------------------------------------------------------------------------------
 instance MonadTransControl (SafeT v i) where
 #if __GLASGOW_HASKELL__ >= 704
-    type LayerResult (SafeT v i) = Identity
-    type LayerState (SafeT v i) m = v (ReleaseMap i)
-    peel (SafeT f) istate = liftM (\a -> (Identity a, istate)) (f istate)
-    restore (Identity a, _) = return a
-    suspend = SafeT $ \istate -> return istate
+    suspend (SafeT f) istate = liftM (\a -> (Identity a, istate)) (f istate)
+    resume (Identity a, _) = return a
+    capture = SafeT $ \istate -> return istate
     extract _ (Identity a) = Just a
+
+type instance LayerResult (SafeT v i) = Identity
+type instance LayerState (SafeT v i) m = v (ReleaseMap i)
 #else
-    newtype LayerResult (SafeT v i) a = R a
-    newtype LayerState (SafeT v i) m = S (v (ReleaseKey i))
-    peel (SafeT m) (S r) = liftM (\a -> (R a, S r)) (m r)
-    restore (R a, _) = SafeT $ \_ -> return a
-    suspend = SafeT $ \r -> return (S r)
+    suspend (SafeT m) (S r) = liftM (\a -> (R a, S r)) (m r)
+    resume (R a, _) = SafeT $ \_ -> return a
+    capture = SafeT $ \r -> return (S r)
     extract _ (R a) = Just a
+
+newtype instance LayerResult (SafeT v i) a = R a
+newtype instance LayerState (SafeT v i) m = S (v (ReleaseKey i))
 #endif
 
 
@@ -152,7 +154,7 @@ instance MonadPlus m => MonadPlus (SafeT v i m) where
 
 ------------------------------------------------------------------------------
 instance MonadFix m => MonadFix (SafeT v i m) where
-    mfix f = control (\run -> mfix (\a -> run (restore a >>= f)))
+    mfix f = control (\run -> mfix (\a -> run (resume a >>= f)))
 
 
 #if MIN_VERSION_base(4, 4, 0)
@@ -172,7 +174,7 @@ instance MonadIO m => MonadIO (SafeT v i m) where
 ------------------------------------------------------------------------------
 instance 
     ( MonadFork m
-    , MonadLift i m
+    , MonadInner i m
     , MonadST v i
     , MonadTry i
     , MonadTry m
@@ -180,37 +182,37 @@ instance
   =>
     MonadFork (SafeT v i m)
   where
-    fork (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
-        lift' $ stateAlloc istate
+    fork (SafeT f) = SafeT $ \istate -> mask $ \restore -> do
+        liftI $ stateAlloc istate
         fork $ do
-            unmask (f istate) `onException` lift' (stateCleanup False istate)
-            lift' (stateCleanup True istate)
+            restore (f istate) `onException` liftI (stateCleanup False istate)
+            liftI (stateCleanup True istate)
 
-    forkOn n (SafeT f) = SafeT $ \istate -> mask $ \unmask -> do
-        lift' $ stateAlloc istate
+    forkOn n (SafeT f) = SafeT $ \istate -> mask $ \restore -> do
+        liftI $ stateAlloc istate
         forkOn n $ do
-            unmask (f istate) `onException` lift' (stateCleanup False istate)
-            lift' (stateCleanup True istate)
+            restore (f istate) `onException` liftI (stateCleanup False istate)
+            liftI (stateCleanup True istate)
 
 
 ------------------------------------------------------------------------------
-instance (MonadST v i, MonadLift i m, MonadMask i) =>
+instance (MonadST v i, MonadInner i m, MonadMask i) =>
     MonadSafe i (SafeT v i m)
   where
-    register' fin = SafeT $ \istate -> lift' $ register istate fin
+    register' fin = SafeT $ \istate -> liftI $ register istate fin
     {-# INLINE register' #-}
 
 
 ------------------------------------------------------------------------------
-runSafeT :: (MonadST v i, MonadLift i m, MonadTry i, MonadTry m)
+runSafeT :: (MonadST v i, MonadInner i m, MonadTry i, MonadTry m)
     => SafeT v i m a
     -> m a
 runSafeT (SafeT f :: SafeT v i m a) = do
-    istate <- lift' $ (newRef $ ReleaseMap 0 0 I.empty :: i (v (ReleaseMap i)))
-    mask $ \unmask -> do
-        lift' $ stateAlloc istate
-        a <- unmask (f istate) `onException` lift' (stateCleanup False istate)
-        lift' $ stateCleanup True istate
+    istate <- liftI $ (newRef $ ReleaseMap 0 0 I.empty :: i (v (ReleaseMap i)))
+    mask $ \restore -> do
+        liftI $ stateAlloc istate
+        a <- restore (f istate) `onException` liftI (stateCleanup False istate)
+        liftI $ stateCleanup True istate
         return a
 
 
