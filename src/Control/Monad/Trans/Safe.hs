@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE IncoherentInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -14,8 +15,12 @@ where
 
 -- base ----------------------------------------------------------------------
 import           Control.Applicative
-                     ( Applicative (pure, (<*>))
-                     , Alternative (empty, (<|>))
+                     (
+#if !MIN_VERSION_base(4, 8, 0)
+                       Applicative (pure, (<*>))
+                     ,
+#endif
+                       Alternative (empty, (<|>))
                      )
 import           Control.Monad
                      ( MonadPlus (mzero, mplus)
@@ -30,7 +35,12 @@ import           Control.Monad.Fix (MonadFix (mfix))
 #if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip (mzip, mzipWith, munzip))
 #endif
+#if __GLASGOW_HASKELL__ >= 704
+import           Data.Functor.Identity (Identity (Identity))
+#endif
+#if !MIN_VERSION_base(4, 8, 0)
 import           Data.Word (Word)
+#endif
 
 
 -- containers ----------------------------------------------------------------
@@ -40,7 +50,6 @@ import qualified Data.IntMap as I
 
 -- transformers --------------------------------------------------------------
 import           Control.Monad.IO.Class (MonadIO (liftIO))
-import           Data.Functor.Identity (Identity (Identity))
 
 
 -- layers --------------------------------------------------------------------
@@ -48,8 +57,8 @@ import           Control.Monad.Lift
                      ( MonadTrans
                      , lift
                      , MonadTransControl
-                     , type LayerResult
-                     , type LayerState
+                     , LayerResult
+                     , LayerState
                      , suspend
                      , resume
                      , capture
@@ -108,7 +117,7 @@ type instance LayerState (SafeT v i) m = v (ReleaseMap i)
     extract _ (R a) = Just a
 
 newtype instance LayerResult (SafeT v i) a = R a
-newtype instance LayerState (SafeT v i) m = S (v (ReleaseKey i))
+newtype instance LayerState (SafeT v i) m = S (v (ReleaseMap i))
 #endif
 
 

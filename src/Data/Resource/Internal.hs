@@ -12,7 +12,9 @@ module Data.Resource.Internal
 where
 
 -- base ----------------------------------------------------------------------
+#if !MIN_VERSION_base(4, 8, 0)
 import           Control.Applicative (Applicative, pure, (<*>))
+#endif
 import           Control.Arrow (first)
 import           Control.Concurrent (ThreadId)
 import           Control.Monad
@@ -24,7 +26,9 @@ import           Control.Monad
 #if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip, mzip, mzipWith, munzip)
 #endif
+#if !MIN_VERSION_base(4, 8, 0)
 import           Data.Monoid (Monoid, mempty, mappend)
+#endif
 
 
 -- layers --------------------------------------------------------------------

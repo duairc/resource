@@ -20,8 +20,8 @@ where
 -- resource ------------------------------------------------------------------
 import           Control.Monad.Trans.Safe (SafeT, runSafeT)
 import           Data.Resource.Internal
-                     ( Resource (Resource, unsafeAcquire)
-                     , Finalizers (Finalizers, onError, onSuccess)
+                     ( Resource (..)
+                     , Finalizers (..)
                      , resource
                      , resource'
                      , with

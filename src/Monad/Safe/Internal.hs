@@ -1,9 +1,14 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverlappingInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
+
+#ifdef LANGUAGE_ConstraintKinds
+{-# LANGUAGE ConstraintKinds #-}
+#endif
 
 module Monad.Safe.Internal
     ( MonadSafe (register')
@@ -23,18 +28,14 @@ where
 import           Control.Monad (liftM)
 
 
--- mmorph --------------------------------------------------------------------
-import           Control.Monad.Trans.Compose (ComposeT (ComposeT))
-
-
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Lift (MonadInner, liftI)
 import           Control.Monad.Lift.Top (MonadTop, liftT)
 import           Monad.Mask (MonadMask, mask, mask_)
 
 
--- transformers --------------------------------------------------------------
-import           Data.Functor.Product (Product (Pair))
+-- mmorph --------------------------------------------------------------------
+import           Control.Monad.Trans.Compose (ComposeT (ComposeT))
 
 
 -- resource ------------------------------------------------------------------
@@ -42,17 +43,14 @@ import           Data.Resource.Internal (Finalizers (Finalizers, onSuccess))
 
 
 ------------------------------------------------------------------------------
-class MonadInner i m => MonadSafe i m where
+class MonadInner i m => MonadSafe i m | m -> i where
     register' :: Finalizers i -> m (ReleaseKey i)
 
 
 ------------------------------------------------------------------------------
-instance (MonadSafe i f, MonadSafe i g) => MonadSafe i (Pair f g) where
-    register' f = Pair (register' f) (register' f)
-
-
-------------------------------------------------------------------------------
-instance MonadSafe i (f (g m)) => MonadSafe i (ComposeT f g m) where
+instance (MonadInner i (ComposeT f g m), MonadSafe i (f (g m))) =>
+    MonadSafe i (ComposeT f g m)
+  where
     register' = ComposeT . register'
 
 

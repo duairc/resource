@@ -1,9 +1,12 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE MagicHash #-}
-{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE UnboxedTuples #-}
+
+#ifdef SafeHaskell
+{-# LANGUAGE Trustworthy #-}
+#endif
 
 module Data.Resource.Base
     (
@@ -42,7 +45,9 @@ where
 -- base ----------------------------------------------------------------------
 import           Control.Concurrent (MVar, putMVar, takeMVar)
 import           Data.Char (ord)
+#if !MIN_VERSION_base(4, 8, 0)
 import           Data.Monoid (mempty)
+#endif
 import           Foreign.C.String
                      ( CString
                      , CWString
@@ -53,8 +58,12 @@ import           Foreign.C.String
                      , newCStringLen
                      )
 import           Foreign.C.Types (CWchar)
-import           Foreign.ForeignPtr.Safe (ForeignPtr, touchForeignPtr)
+import           Foreign.ForeignPtr (ForeignPtr, touchForeignPtr)
+#if MIN_VERSION_base(4, 4, 0)
 import           Foreign.ForeignPtr.Unsafe (unsafeForeignPtrToPtr)
+#else
+import           Foreign.ForeignPtr (unsafeForeignPtrToPtr)
+#endif
 import           Foreign.Marshal.Alloc (free)
 import           Foreign.Marshal.Array (pokeArray, pokeArray0)
 import           Foreign.Marshal.Pool (Pool, newPool, freePool)
