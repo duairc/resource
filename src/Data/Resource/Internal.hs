@@ -82,8 +82,8 @@ instance MFunctor Resource where
 
 
 ------------------------------------------------------------------------------
-instance Monad m => Functor (Resource m) where
-    fmap f (Resource m) = Resource $ liftM (first f) m
+instance Functor m => Functor (Resource m) where
+    fmap f (Resource m) = Resource $ fmap (first f) m
 
 
 ------------------------------------------------------------------------------
