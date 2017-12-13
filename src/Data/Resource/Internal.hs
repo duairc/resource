@@ -29,6 +29,9 @@ import           Control.Monad.Zip (MonadZip, mzip, mzipWith, munzip)
 #if !MIN_VERSION_base(4, 8, 0)
 import           Data.Monoid (Monoid, mempty, mappend)
 #endif
+#if MIN_VERSION_base(4, 9, 0)
+import           Data.Semigroup (Semigroup, (<>))
+#endif
 
 
 -- layers --------------------------------------------------------------------
@@ -53,12 +56,25 @@ import           Control.Monad.IO.Class (MonadIO, liftIO)
 data Finalizers m = Finalizers { onError :: !(m ()), onSuccess :: !(m ()) }
 
 
+#if MIN_VERSION_base(4, 9, 0)
+------------------------------------------------------------------------------
+instance MonadTry m => Semigroup (Finalizers m) where
+    Finalizers e s <> Finalizers e' s' = Finalizers
+        (finally e e')
+        (onException s e' >> s')
+
+
+#endif
 ------------------------------------------------------------------------------
 instance MonadTry m => Monoid (Finalizers m) where
     mempty = Finalizers (return ()) (return ())
+#if MIN_VERSION_base(4, 9, 0)
+    mappend = (<>)
+#else
     Finalizers e s `mappend` Finalizers e' s' = Finalizers
         (finally e e')
         (onException s e' >> s')
+#endif
 
 
 ------------------------------------------------------------------------------
