@@ -103,7 +103,7 @@ instance Functor m => Functor (Resource m) where
 
 
 ------------------------------------------------------------------------------
-instance MonadTry m => Applicative (Resource m) where
+instance (Functor m, MonadTry m) => Applicative (Resource m) where
     pure a = Resource (return (a, mempty))
     Resource mf <*> Resource ma = Resource $ do
         (f, fin_f) <- mf

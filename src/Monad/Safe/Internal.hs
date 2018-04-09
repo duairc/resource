@@ -6,10 +6,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-#ifdef LANGUAGE_ConstraintKinds
-{-# LANGUAGE ConstraintKinds #-}
-#endif
-
 module Monad.Safe.Internal
     ( MonadSafe (register')
     , register
@@ -29,8 +25,7 @@ import           Control.Monad (liftM)
 
 
 -- layers --------------------------------------------------------------------
-import           Control.Monad.Lift (MonadInner, liftI)
-import           Control.Monad.Lift.Top (MonadTop, liftT)
+import           Control.Monad.Lift (MonadTrans, lift, MonadInner, liftI)
 import           Monad.Mask (MonadMask, mask, mask_)
 
 
@@ -55,10 +50,10 @@ instance (MonadInner i (ComposeT f g m), MonadSafe i (f (g m))) =>
 
 
 ------------------------------------------------------------------------------
-instance (MonadTop t m, MonadSafe i m, MonadInner i (t m)) =>
+instance (MonadTrans t, MonadSafe i m, MonadInner i (t m)) =>
     MonadSafe i (t m)
   where
-    register' = liftT . register'
+    register' = lift . register'
 
 
 ------------------------------------------------------------------------------

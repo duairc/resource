@@ -32,12 +32,11 @@ import           Control.Monad
                      , when
                      )
 import           Control.Monad.Fix (MonadFix (mfix))
+import           Control.Monad.IO.Class (MonadIO (liftIO))
 #if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip (mzip, mzipWith, munzip))
 #endif
-#if __GLASGOW_HASKELL__ >= 704
 import           Data.Functor.Identity (Identity (Identity))
-#endif
 #if !MIN_VERSION_base(4, 8, 0)
 import           Data.Word (Word)
 #endif
@@ -46,10 +45,6 @@ import           Data.Word (Word)
 -- containers ----------------------------------------------------------------
 import           Data.IntMap (IntMap)
 import qualified Data.IntMap as I
-
-
--- transformers --------------------------------------------------------------
-import           Control.Monad.IO.Class (MonadIO (liftIO))
 
 
 -- layers --------------------------------------------------------------------
@@ -102,23 +97,15 @@ instance MonadTrans (SafeT v i) where
 
 ------------------------------------------------------------------------------
 instance MonadTransControl (SafeT v i) where
-#if __GLASGOW_HASKELL__ >= 704
     suspend (SafeT f) istate = liftM (\a -> (Identity a, istate)) (f istate)
     resume (Identity a, _) = return a
     capture = SafeT $ \istate -> return istate
-    extract _ (Identity a) = Just a
+    extract _ (Identity a) = Right a
 
+
+------------------------------------------------------------------------------
 type instance LayerResult (SafeT v i) = Identity
-type instance LayerState (SafeT v i) m = v (ReleaseMap i)
-#else
-    suspend (SafeT m) (S r) = liftM (\a -> (R a, S r)) (m r)
-    resume (R a, _) = SafeT $ \_ -> return a
-    capture = SafeT $ \r -> return (S r)
-    extract _ (R a) = Just a
-
-newtype instance LayerResult (SafeT v i) a = R a
-newtype instance LayerState (SafeT v i) m = S (v (ReleaseMap i))
-#endif
+type instance LayerState (SafeT v i) = v (ReleaseMap i)
 
 
 ------------------------------------------------------------------------------
@@ -172,9 +159,9 @@ instance MonadZip m => MonadZip (SafeT v i m) where
     mzipWith f = liftM2 f
     mzip = liftM2 (,)
     munzip m = (liftM fst m, liftM snd m)
+
+
 #endif
-
-
 ------------------------------------------------------------------------------
 instance MonadIO m => MonadIO (SafeT v i m) where
     liftIO = lift . liftIO
