@@ -13,6 +13,7 @@ bug-reports:    http://github.com/duairc/resource/issues
 build-type:     Simple
 
 extra-source-files:
+  include/*.h
   CONTRIBUTORS
 
 Library
