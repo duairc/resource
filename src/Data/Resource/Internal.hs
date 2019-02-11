@@ -23,6 +23,10 @@ import           Control.Monad
                      , liftM2
 #endif
                      )
+#if MIN_VERSION_base(4, 9, 0)
+import           Control.Monad.Fail (MonadFail)
+import qualified Control.Monad.Fail as F
+#endif
 #if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip, mzip, mzipWith, munzip)
 #endif
@@ -36,12 +40,9 @@ import           Data.Semigroup (Semigroup, (<>))
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Lift
-                     ( MonadTrans
-                     , lift
-                     , MInvariant
-                     , hoistiso
-                     , MFunctor
-                     , hoist
+                     ( MonadTrans, lift
+                     , MInvariant, hoistiso
+                     , MFunctor, hoist
                      )
 import           Monad.Fork (MonadFork, fork)
 import           Monad.Mask (mask)
@@ -122,15 +123,22 @@ instance MonadTry m => Monad (Resource m) where
     fail = lift . fail
 
 
+#if MIN_VERSION_base(4, 9, 0)
+------------------------------------------------------------------------------
+instance (MonadFail m, MonadTry m) => MonadFail (Resource m) where
+    fail = lift . F.fail
+
+
+#endif
 #if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
 instance (MonadTry m, MonadZip m) => MonadZip (Resource m) where
     mzipWith = liftM2
     mzip = liftM2 (,)
     munzip m = (liftM fst m, liftM snd m)
+
+
 #endif
-
-
 ------------------------------------------------------------------------------
 instance (MonadIO m, MonadTry m) => MonadIO (Resource m) where
     liftIO = Resource . liftIO . fmap (\a -> (a, mempty))

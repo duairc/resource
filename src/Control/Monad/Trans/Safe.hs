@@ -33,6 +33,10 @@ import           Control.Monad
                      )
 import           Control.Monad.Fix (MonadFix (mfix))
 import           Control.Monad.IO.Class (MonadIO (liftIO))
+#if MIN_VERSION_base(4, 9, 0)
+import           Control.Monad.Fail (MonadFail)
+import qualified Control.Monad.Fail as F
+#endif
 #if MIN_VERSION_base(4, 4, 0)
 import           Control.Monad.Zip (MonadZip (mzip, mzipWith, munzip))
 #endif
@@ -49,22 +53,12 @@ import qualified Data.IntMap as I
 
 -- layers --------------------------------------------------------------------
 import           Control.Monad.Lift
-                     ( MonadTrans
-                     , lift
-                     , MonadTransControl
-                     , LayerResult
-                     , LayerState
-                     , suspend
-                     , resume
-                     , capture
-                     , extract
-                     , control
-                     , MInvariant
-                     , hoistiso
-                     , MFunctor
-                     , hoist
-                     , MonadInner
-                     , liftI
+                     ( MonadTrans, lift
+                     , MonadTransControl, LayerResult, LayerState
+                     , suspend, resume, capture, extract, control
+                     , MInvariant, hoistiso
+                     , MFunctor, hoist
+                     , MonadInner, liftI
                      )
 import           Monad.Fork (MonadFork, fork, forkOn)
 import           Monad.Mask (MonadMask, mask, mask_)
@@ -153,6 +147,13 @@ instance MonadFix m => MonadFix (SafeT v i m) where
     mfix f = control (\run -> mfix (\a -> run (resume a >>= f)))
 
 
+#if MIN_VERSION_base(4, 9, 0)
+------------------------------------------------------------------------------
+instance MonadFail m => MonadFail (SafeT v i m) where
+    fail = lift . F.fail
+
+
+#endif
 #if MIN_VERSION_base(4, 4, 0)
 ------------------------------------------------------------------------------
 instance MonadZip m => MonadZip (SafeT v i m) where
