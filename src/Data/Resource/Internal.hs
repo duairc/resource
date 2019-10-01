@@ -24,7 +24,9 @@ import           Control.Monad
 #endif
                      )
 #if MIN_VERSION_base(4, 9, 0)
+#if !MIN_VERSION_base(4, 13, 0)
 import           Control.Monad.Fail (MonadFail)
+#endif
 import qualified Control.Monad.Fail as F
 #endif
 #if MIN_VERSION_base(4, 4, 0)
@@ -33,7 +35,7 @@ import           Control.Monad.Zip (MonadZip, mzip, mzipWith, munzip)
 #if !MIN_VERSION_base(4, 8, 0)
 import           Data.Monoid (Monoid, mempty, mappend)
 #endif
-#if MIN_VERSION_base(4, 9, 0)
+#if MIN_VERSION_base(4, 9, 0) && !MIN_VERSION_base(4, 11, 0)
 import           Data.Semigroup (Semigroup, (<>))
 #endif
 
@@ -120,7 +122,9 @@ instance MonadTry m => Monad (Resource m) where
         let Resource mb = f a
         (b, fin_b) <- mb `onException` onError fin_a
         return (b, fin_b `mappend` fin_a)
+#if !MIN_VERSION_base(4, 13, 0)
     fail = lift . fail
+#endif
 
 
 #if MIN_VERSION_base(4, 9, 0)

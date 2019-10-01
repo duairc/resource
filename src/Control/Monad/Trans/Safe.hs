@@ -34,7 +34,9 @@ import           Control.Monad
 import           Control.Monad.Fix (MonadFix (mfix))
 import           Control.Monad.IO.Class (MonadIO (liftIO))
 #if MIN_VERSION_base(4, 9, 0)
+#if !MIN_VERSION_base(4, 13, 0)
 import           Control.Monad.Fail (MonadFail)
+#endif
 import qualified Control.Monad.Fail as F
 #endif
 #if MIN_VERSION_base(4, 4, 0)
@@ -133,7 +135,9 @@ instance MonadPlus m => Alternative (SafeT v i m) where
 instance Monad m => Monad (SafeT v i m) where
     return = lift . return
     SafeT m >>= f = SafeT $ \r -> m r >>= \a -> let SafeT m' = f a in m' r
+#if !MIN_VERSION_base(4, 13, 0)
     fail = lift . fail
+#endif
 
 
 ------------------------------------------------------------------------------
